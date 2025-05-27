@@ -1,12 +1,17 @@
 const express = require('express');
 const router = express.Router();
 
-// Database connection
+// Database connection (optional for personal use)
 const { Pool } = require('pg');
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+let pool = null;
+
+// Only initialize database if DATABASE_URL is provided
+if (process.env.DATABASE_URL) {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+}
 
 // Middleware to check authentication
 const requireAuth = (req, res, next) => {
@@ -362,43 +367,67 @@ router.get('/export', requireAuth, async (req, res) => {
 // Get user's Notion integration settings (alias for /settings)
 router.get('/notion-settings', requireAuth, async (req, res) => {
   try {
-    const query = `
-      SELECT 
-        us.notion_database_id as databaseId,
-        us.field_mappings as fieldMapping,
-        us.default_properties as defaultValues,
-        us.created_at,
-        us.updated_at,
-        u.notion_workspace_name,
-        u.email
-      FROM user_settings us
-      LEFT JOIN users u ON us.user_id = u.id
-      WHERE us.user_id = $1;
-    `;
+    // Check if database is available
+    if (pool) {
+      try {
+        const query = `
+          SELECT 
+            us.notion_database_id as databaseId,
+            us.field_mappings as fieldMapping,
+            us.default_properties as defaultValues,
+            us.created_at,
+            us.updated_at,
+            u.notion_workspace_name,
+            u.email
+          FROM user_settings us
+          LEFT JOIN users u ON us.user_id = u.id
+          WHERE us.user_id = $1;
+        `;
 
-    const result = await pool.query(query, [req.session.userId]);
+        const result = await pool.query(query, [req.session.userId]);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No Notion settings found' 
-      });
+        if (result.rows.length === 0) {
+          return res.status(404).json({ 
+            success: false,
+            message: 'No Notion settings found' 
+          });
+        }
+
+        const settings = result.rows[0];
+        
+        // Parse JSON fields
+        if (typeof settings.fieldmapping === 'string') {
+          settings.fieldMapping = JSON.parse(settings.fieldmapping);
+        }
+        if (typeof settings.defaultvalues === 'string') {
+          settings.defaultValues = JSON.parse(settings.defaultvalues);
+        }
+
+        return res.json({
+          success: true,
+          data: {
+            settings
+          }
+        });
+      } catch (dbError) {
+        console.log('Database check failed, using session data:', dbError.message);
+        // Fall through to session-based storage
+      }
     }
 
-    const settings = result.rows[0];
-    
-    // Parse JSON fields
-    if (typeof settings.fieldmapping === 'string') {
-      settings.fieldMapping = JSON.parse(settings.fieldmapping);
-    }
-    if (typeof settings.defaultvalues === 'string') {
-      settings.defaultValues = JSON.parse(settings.defaultvalues);
-    }
+    // Use session-based storage when database is not available
+    const sessionSettings = req.session.notionSettings || {
+      databaseId: null,
+      fieldMapping: {},
+      defaultValues: {},
+      workspaceName: req.session.notionWorkspaceName || null,
+      email: req.session.notionEmail || null
+    };
 
     res.json({
       success: true,
       data: {
-        settings
+        settings: sessionSettings
       }
     });
 
@@ -420,43 +449,68 @@ router.put('/notion-settings', requireAuth, async (req, res) => {
       defaultValues
     } = req.body;
 
-    const query = `
-      INSERT INTO user_settings (user_id, notion_database_id, field_mappings, default_properties)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (user_id) 
-      DO UPDATE SET 
-        notion_database_id = EXCLUDED.notion_database_id,
-        field_mappings = EXCLUDED.field_mappings,
-        default_properties = EXCLUDED.default_properties,
-        updated_at = CURRENT_TIMESTAMP
-      RETURNING 
-        notion_database_id as databaseId,
-        field_mappings as fieldMapping,
-        default_properties as defaultValues,
-        updated_at;
-    `;
+    // Check if database is available
+    if (pool) {
+      try {
+        const query = `
+          INSERT INTO user_settings (user_id, notion_database_id, field_mappings, default_properties)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (user_id) 
+          DO UPDATE SET 
+            notion_database_id = EXCLUDED.notion_database_id,
+            field_mappings = EXCLUDED.field_mappings,
+            default_properties = EXCLUDED.default_properties,
+            updated_at = CURRENT_TIMESTAMP
+          RETURNING 
+            notion_database_id as databaseId,
+            field_mappings as fieldMapping,
+            default_properties as defaultValues,
+            updated_at;
+        `;
 
-    const result = await pool.query(query, [
-      req.session.userId,
-      databaseId || null,
-      JSON.stringify(fieldMapping || {}),
-      JSON.stringify(defaultValues || {})
-    ]);
+        const result = await pool.query(query, [
+          req.session.userId,
+          databaseId || null,
+          JSON.stringify(fieldMapping || {}),
+          JSON.stringify(defaultValues || {})
+        ]);
 
-    const settings = result.rows[0];
-    
-    // Parse JSON fields
-    if (typeof settings.fieldmapping === 'string') {
-      settings.fieldMapping = JSON.parse(settings.fieldmapping);
+        const settings = result.rows[0];
+        
+        // Parse JSON fields
+        if (typeof settings.fieldmapping === 'string') {
+          settings.fieldMapping = JSON.parse(settings.fieldmapping);
+        }
+        if (typeof settings.defaultvalues === 'string') {
+          settings.defaultValues = JSON.parse(settings.defaultvalues);
+        }
+
+        return res.json({
+          success: true,
+          data: {
+            settings
+          }
+        });
+      } catch (dbError) {
+        console.log('Database storage failed, using session-only storage:', dbError.message);
+        // Fall through to session-based storage
+      }
     }
-    if (typeof settings.defaultvalues === 'string') {
-      settings.defaultValues = JSON.parse(settings.defaultvalues);
-    }
+
+    // Use session-based storage when database is not available
+    req.session.notionSettings = {
+      databaseId: databaseId || null,
+      fieldMapping: fieldMapping || {},
+      defaultValues: defaultValues || {},
+      workspaceName: req.session.notionWorkspaceName || null,
+      email: req.session.notionEmail || null,
+      updatedAt: new Date().toISOString()
+    };
 
     res.json({
       success: true,
       data: {
-        settings
+        settings: req.session.notionSettings
       }
     });
 

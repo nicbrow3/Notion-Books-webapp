@@ -115,32 +115,56 @@ const Notion: React.FC = () => {
     try {
       setIsSavingSettings(true);
 
-      // Create default field mapping based on available properties
-      const defaultMapping: BookToNotionMapping = {
-        title: findPropertyByType('title') || 'Title',
-        authors: findPropertyByType('rich_text') || 'Authors',
-        description: findPropertyByName('description') || findPropertyByType('rich_text', 1),
-        isbn: findPropertyByName('isbn') || findPropertyByType('rich_text', 2),
-        publishedDate: findPropertyByType('date') || 'Published Date',
-        publisher: findPropertyByName('publisher') || findPropertyByType('rich_text', 3),
-        pageCount: findPropertyByType('number') || 'Page Count',
-        categories: findPropertyByType('multi_select') || 'Categories',
-        rating: findPropertyByName('rating') || findPropertyByType('number', 1),
-        thumbnail: findPropertyByType('url') || 'Cover URL',
-        status: findPropertyByName('status') || findPropertyByType('select'),
-        notes: findPropertyByName('notes') || findPropertyByType('rich_text', 4),
-      };
+      // Use suggested mappings if available, otherwise fall back to manual detection
+      let fieldMapping: BookToNotionMapping;
+      
+      if (databaseProperties.suggestedMappings && Object.keys(databaseProperties.suggestedMappings).length > 0) {
+        // Convert suggested mappings to the format expected by NotionIntegrationSettings
+        const mappings = databaseProperties.suggestedMappings;
+        fieldMapping = {
+          title: (!mappings.title?.ignored && mappings.title?.notionProperty) || findPropertyByType('title') || 'Title',
+          authors: (!mappings.authors?.ignored && mappings.authors?.notionProperty) || findPropertyByType('rich_text') || 'Authors',
+          description: (!mappings.description?.ignored && mappings.description?.notionProperty) || findPropertyByName('description') || findPropertyByType('rich_text', 1),
+          isbn: (!mappings.isbn13?.ignored && mappings.isbn13?.notionProperty) || (!mappings.isbn10?.ignored && mappings.isbn10?.notionProperty) || findPropertyByName('isbn') || findPropertyByType('rich_text', 2),
+          publishedDate: (!mappings.publishedDate?.ignored && mappings.publishedDate?.notionProperty) || findPropertyByType('date') || 'Published Date',
+          publisher: (!mappings.publisher?.ignored && mappings.publisher?.notionProperty) || findPropertyByName('publisher') || findPropertyByType('rich_text', 3),
+          pageCount: (!mappings.pageCount?.ignored && mappings.pageCount?.notionProperty) || findPropertyByType('number') || 'Page Count',
+          categories: (!mappings.categories?.ignored && mappings.categories?.notionProperty) || findPropertyByType('multi_select') || 'Categories',
+          rating: (!mappings.averageRating?.ignored && mappings.averageRating?.notionProperty) || findPropertyByName('rating') || findPropertyByType('number', 1),
+          thumbnail: (!mappings.thumbnail?.ignored && mappings.thumbnail?.notionProperty) || findPropertyByType('url') || 'Cover URL',
+          status: findPropertyByName('status') || findPropertyByType('select'),
+          notes: findPropertyByName('notes') || findPropertyByType('rich_text', 4),
+        };
+      } else {
+        // Fallback to manual detection
+        fieldMapping = {
+          title: findPropertyByType('title') || 'Title',
+          authors: findPropertyByType('rich_text') || 'Authors',
+          description: findPropertyByName('description') || findPropertyByType('rich_text', 1),
+          isbn: findPropertyByName('isbn') || findPropertyByType('rich_text', 2),
+          publishedDate: findPropertyByType('date') || 'Published Date',
+          publisher: findPropertyByName('publisher') || findPropertyByType('rich_text', 3),
+          pageCount: findPropertyByType('number') || 'Page Count',
+          categories: findPropertyByType('multi_select') || 'Categories',
+          rating: findPropertyByName('rating') || findPropertyByType('number', 1),
+          thumbnail: findPropertyByType('url') || 'Cover URL',
+          status: findPropertyByName('status') || findPropertyByType('select'),
+          notes: findPropertyByName('notes') || findPropertyByType('rich_text', 4),
+        };
+      }
 
       const settings: NotionIntegrationSettings = {
         databaseId: selectedDatabase,
-        fieldMapping: defaultMapping,
+        fieldMapping,
         defaultValues: {},
         autoAddBooks: false,
       };
 
       await NotionService.saveSettings(settings);
       setNotionSettings(settings);
-      toast.success('Notion settings saved successfully!');
+      
+      const mappingCount = Object.values(fieldMapping).filter(Boolean).length;
+      toast.success(`Notion settings saved! ${mappingCount} field mappings configured.`);
     } catch (error) {
       console.error('Failed to save settings:', error);
       toast.error('Failed to save Notion settings');
@@ -152,18 +176,18 @@ const Notion: React.FC = () => {
   const findPropertyByType = (type: string, index: number = 0): string | undefined => {
     if (!databaseProperties?.properties) return undefined;
     
-    const properties = Object.entries(databaseProperties.properties)
-      .filter(([_, prop]: [string, any]) => prop.type === type);
+    const properties = databaseProperties.properties
+      .filter((prop: any) => prop.type === type);
     
-    return properties[index]?.[0];
+    return properties[index]?.name;
   };
 
   const findPropertyByName = (name: string): string | undefined => {
     if (!databaseProperties?.properties) return undefined;
     
     const lowerName = name.toLowerCase();
-    return Object.keys(databaseProperties.properties)
-      .find(propName => propName.toLowerCase().includes(lowerName));
+    return databaseProperties.properties
+      .find((prop: any) => prop.name.toLowerCase().includes(lowerName))?.name;
   };
 
   const handleSearch = async (params: SearchParams) => {
@@ -260,15 +284,79 @@ const Notion: React.FC = () => {
                   </div>
                 ) : databaseProperties ? (
                   <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-2">Database Properties</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                      {Object.entries(databaseProperties.properties).map(([name, prop]: [string, any]) => (
-                        <div key={name} className="flex items-center space-x-2">
-                          <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
-                          <span className="text-gray-700">{name}</span>
-                          <span className="text-gray-500 text-xs">({prop.type})</span>
+                    <h4 className="font-medium text-gray-900 mb-4">Database Properties & Field Mapping</h4>
+                    
+                    {/* Show suggested field mappings if available */}
+                    {databaseProperties.suggestedMappings && Object.keys(databaseProperties.suggestedMappings).length > 0 && (
+                      <div className="mb-6">
+                        <h5 className="font-medium text-gray-800 mb-3">🎯 Suggested Field Mappings</h5>
+                        <div className="space-y-2">
+                          {Object.entries(databaseProperties.suggestedMappings).map(([googleField, mapping]: [string, any]) => (
+                            <div key={googleField} className="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-200">
+                              <div className="flex items-center space-x-3">
+                                <span className="text-sm font-medium text-blue-600 capitalize">
+                                  {googleField.replace(/([A-Z])/g, ' $1').trim()}
+                                </span>
+                                <span className="text-gray-400">→</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {mapping.notionProperty}
+                                </span>
+                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                  {mapping.notionType}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-2">
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    mapping.confidence >= 80 ? 'bg-green-500' : 
+                                    mapping.confidence >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}></div>
+                                  <span className="text-xs text-gray-500">{mapping.confidence}%</span>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    // Toggle ignore status for this field
+                                    const updatedMappings = { ...databaseProperties.suggestedMappings };
+                                    updatedMappings[googleField] = {
+                                      ...mapping,
+                                      ignored: !mapping.ignored
+                                    };
+                                    setDatabaseProperties({
+                                      ...databaseProperties,
+                                      suggestedMappings: updatedMappings
+                                    });
+                                  }}
+                                  className={`text-xs px-2 py-1 rounded transition-colors ${
+                                    mapping.ignored 
+                                      ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                  }`}
+                                  title={mapping.ignored ? 'Click to include this field' : 'Click to ignore this field'}
+                                >
+                                  {mapping.ignored ? '🚫 Ignored' : '👁️ Include'}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                        <div className="mt-3 text-xs text-gray-500">
+                          💡 Tip: Click "Include/Ignored" to control which fields get populated from Google Books data
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show all database properties */}
+                    <div className="mb-4">
+                      <h5 className="font-medium text-gray-800 mb-3">📋 All Database Properties</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                        {databaseProperties.properties.map((prop: any) => (
+                          <div key={prop.name} className="flex items-center space-x-2">
+                            <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+                            <span className="text-gray-700">{prop.name}</span>
+                            <span className="text-gray-500 text-xs">({prop.type})</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     
                     <div className="mt-4 flex justify-end">

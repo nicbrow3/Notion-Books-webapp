@@ -9,28 +9,35 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 export class NotionService {
   /**
-   * Initiate Notion OAuth flow
+   * Setup Notion integration using personal token
    */
-  static async initiateAuth(): Promise<void> {
+  static async setupIntegration(): Promise<{ success: boolean; message: string; user?: any }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/notion`, {
+      const response = await fetch(`${API_BASE_URL}/auth/setup`, {
         method: 'POST',
         credentials: 'include',
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        return {
+          success: false,
+          message: result.error || `HTTP error! status: ${response.status}`
+        };
       }
 
-      const result = await response.json();
-      if (result.authUrl) {
-        window.location.href = result.authUrl;
-      } else {
-        throw new Error('No auth URL received from server');
-      }
+      return {
+        success: true,
+        message: result.message || 'Successfully connected to Notion',
+        user: result.user
+      };
     } catch (error) {
-      console.error('Auth initiation error:', error);
-      throw error;
+      console.error('Setup integration error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to setup Notion integration'
+      };
     }
   }
 
@@ -89,7 +96,7 @@ export class NotionService {
       }
 
       const result = await response.json();
-      return result.success ? result.data.databases : [];
+      return result.databases || [];
     } catch (error) {
       console.error('Get databases error:', error);
       throw error;
@@ -112,7 +119,7 @@ export class NotionService {
       }
 
       const result = await response.json();
-      return result.success ? result.data : {};
+      return result;
     } catch (error) {
       console.error('Get database properties error:', error);
       throw error;
@@ -139,7 +146,7 @@ export class NotionService {
       }
 
       const result = await response.json();
-      return result.success ? result.data.page : null;
+      return result;
     } catch (error) {
       console.error('Create page error:', error);
       throw error;
@@ -166,7 +173,7 @@ export class NotionService {
       }
 
       const result = await response.json();
-      return result.success ? result.data.page : null;
+      return result;
     } catch (error) {
       console.error('Update page error:', error);
       throw error;

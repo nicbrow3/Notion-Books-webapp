@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { NotionService } from '../services/notionService';
 
@@ -11,6 +11,12 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
+  const onAuthChangeRef = useRef(onAuthChange);
+
+  // Keep the ref updated with the latest callback
+  useEffect(() => {
+    onAuthChangeRef.current = onAuthChange;
+  }, [onAuthChange]);
 
   const checkAuthStatus = useCallback(async () => {
     try {
@@ -19,8 +25,8 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
       setIsAuthenticated(authStatus.authenticated);
       setUser(authStatus.user);
       
-      if (onAuthChange) {
-        onAuthChange(authStatus.authenticated, authStatus.user);
+      if (onAuthChangeRef.current) {
+        onAuthChangeRef.current(authStatus.authenticated, authStatus.user);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -28,30 +34,30 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [onAuthChange]);
+  }, []); // No dependencies to prevent infinite loop
 
   useEffect(() => {
     checkAuthStatus();
-  }, [checkAuthStatus]);
+  }, []); // Only run once on mount
 
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      toast.loading('Redirecting to Notion...', { id: 'notion-auth' });
+      toast.loading('Connecting to Notion...', { id: 'notion-auth' });
       
-      // Small delay to show the loading state
-      setTimeout(async () => {
-        try {
-          await NotionService.initiateAuth();
-        } catch (error) {
-          console.error('Auth initiation failed:', error);
-          toast.error('Failed to initiate Notion authentication');
-          setIsConnecting(false);
-        }
-      }, 500);
+      const result = await NotionService.setupIntegration();
+      
+      if (result.success) {
+        toast.success(result.message, { id: 'notion-auth' });
+        // Refresh auth status
+        await checkAuthStatus();
+      } else {
+        toast.error(result.message, { id: 'notion-auth' });
+      }
     } catch (error) {
-      console.error('Auth initiation failed:', error);
-      toast.error('Failed to initiate Notion authentication');
+      console.error('Connection failed:', error);
+      toast.error('Failed to connect to Notion', { id: 'notion-auth' });
+    } finally {
       setIsConnecting(false);
     }
   };
@@ -165,7 +171,7 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
         
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect to Notion</h3>
         <p className="text-gray-600 mb-6">
-          Connect your Notion account to start adding books to your database.
+          Connect to your personal Notion workspace to start adding books to your database.
         </p>
 
         <button
@@ -196,7 +202,7 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
         </button>
 
         <p className="text-xs text-gray-500 mt-4">
-          You'll be redirected to Notion to authorize this application.
+          Make sure you have configured your Notion integration token in the backend.
         </p>
       </div>
     </div>

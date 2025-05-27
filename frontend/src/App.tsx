@@ -4,8 +4,6 @@ import { Toaster } from 'react-hot-toast';
 
 // Pages
 import Landing from './pages/Landing';
-import AuthSuccess from './pages/AuthSuccess';
-import AuthError from './pages/AuthError';
 import Dashboard from './pages/Dashboard';
 import Search from './pages/Search';
 import BookReview from './pages/BookReview';
@@ -24,8 +22,6 @@ function App() {
         <main className="container mx-auto px-4 py-8">
           <Routes>
             <Route path="/" element={<Landing />} />
-            <Route path="/auth/success" element={<AuthSuccess />} />
-            <Route path="/auth/error" element={<AuthError />} />
             
             {/* Protected Routes */}
             <Route path="/dashboard" element={
