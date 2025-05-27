@@ -131,13 +131,17 @@ export class NotionService {
    */
   static async createPage(request: CreateNotionPageRequest): Promise<NotionPage> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/notion/pages`, {
+      const response = await fetch(`${API_BASE_URL}/api/notion/pages/book`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(request),
+        body: JSON.stringify({
+          databaseId: request.databaseId,
+          bookData: request.bookData,
+          fieldMappings: request.fieldMapping
+        }),
       });
 
       if (!response.ok) {
@@ -264,11 +268,12 @@ export class NotionService {
   /**
    * Search for existing books in Notion database to avoid duplicates
    */
-  static async searchExistingBooks(databaseId: string, isbn?: string, title?: string): Promise<NotionPage[]> {
+  static async searchExistingBooks(databaseId: string, isbn?: string, title?: string, fieldMappings?: any): Promise<NotionPage[]> {
     try {
       const searchParams = new URLSearchParams();
       if (isbn) searchParams.append('isbn', isbn);
       if (title) searchParams.append('title', title);
+      if (fieldMappings) searchParams.append('fieldMappings', JSON.stringify(fieldMappings));
 
       const response = await fetch(
         `${API_BASE_URL}/api/notion/database/${databaseId}/search?${searchParams}`,
@@ -284,7 +289,7 @@ export class NotionService {
       }
 
       const result = await response.json();
-      return result.success ? result.data.pages : [];
+      return result.books || [];
     } catch (error) {
       console.error('Search existing books error:', error);
       throw error;

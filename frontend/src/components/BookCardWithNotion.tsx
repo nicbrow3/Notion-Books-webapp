@@ -56,7 +56,8 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
       const existingBooks = await NotionService.searchExistingBooks(
         notionSettings.databaseId,
         book.isbn13 || book.isbn10 || undefined,
-        book.title
+        book.title,
+        notionSettings.fieldMapping
       );
 
       if (existingBooks.length > 0) {

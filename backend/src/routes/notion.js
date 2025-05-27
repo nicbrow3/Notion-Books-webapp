@@ -404,146 +404,170 @@ router.get('/pages/:pageId', requireAuth, async (req, res) => {
 });
 
 // Helper function to format book data for Notion properties
-const formatBookDataForNotion = (bookData, fieldMappings = {}) => {
+const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId, token) => {
   const properties = {};
 
-  // Default mappings
-  const defaultMappings = {
-    title: 'Title',
-    authors: 'Authors',
-    isbn13: 'ISBN',
-    description: 'Description',
-    categories: 'Categories',
-    publishedDate: 'Published Date',
-    publisher: 'Publisher',
-    pageCount: 'Page Count',
-    thumbnail: 'Cover'
+  // Get database schema to understand property types
+  let databaseSchema = null;
+  try {
+    databaseSchema = await notionRequest(token, 'GET', `/databases/${databaseId}`);
+    console.log('Available database properties:', Object.keys(databaseSchema?.properties || {}));
+  } catch (error) {
+    console.error('Failed to fetch database schema:', error);
+    // Fall back to basic formatting without type checking
+  }
+
+  // Helper function to get property type from database schema
+  const getPropertyType = (propertyName) => {
+    if (!databaseSchema?.properties) return null;
+    const property = databaseSchema.properties[propertyName];
+    return property?.type || null;
   };
 
-  const mappings = { ...defaultMappings, ...fieldMappings };
+  // Helper function to format value based on property type
+  const formatPropertyValue = (value, propertyType, propertyName) => {
+    if (!value) return null;
 
-  // Title (required for most databases)
-  if (mappings.title && bookData.title) {
-    properties[mappings.title] = {
-      title: [
-        {
-          text: {
-            content: bookData.title
+    switch (propertyType) {
+      case 'title':
+        return {
+          title: [
+            {
+              text: {
+                content: String(value).substring(0, 2000) // Notion title limit
+              }
+            }
+          ]
+        };
+
+      case 'rich_text':
+        const textContent = Array.isArray(value) ? value.join(', ') : String(value);
+        return {
+          rich_text: [
+            {
+              text: {
+                content: textContent.substring(0, 2000) // Notion rich text limit
+              }
+            }
+          ]
+        };
+
+      case 'multi_select':
+        const options = Array.isArray(value) ? value : [value];
+        return {
+          multi_select: options.slice(0, 10).map(option => ({ // Limit to 10 options
+            name: String(option).substring(0, 100) // Notion option name limit
+          }))
+        };
+
+      case 'select':
+        return {
+          select: {
+            name: String(Array.isArray(value) ? value[0] : value).substring(0, 100)
+          }
+        };
+
+      case 'number':
+        const numValue = parseFloat(value);
+        return isNaN(numValue) ? null : { number: numValue };
+
+      case 'date':
+        // Try to parse date string
+        let dateValue = value;
+        if (typeof value === 'string') {
+          // Handle various date formats
+          const parsedDate = new Date(value);
+          if (!isNaN(parsedDate.getTime())) {
+            dateValue = parsedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
           }
         }
-      ]
-    };
-  }
-
-  // Authors (multi-select or rich text)
-  if (mappings.authors && bookData.authors?.length > 0) {
-    properties[mappings.authors] = {
-      rich_text: [
-        {
-          text: {
-            content: bookData.authors.join(', ')
+        return {
+          date: {
+            start: dateValue
           }
-        }
-      ]
-    };
-  }
+        };
 
-  // ISBN (number or rich text)
-  if (mappings.isbn13 && bookData.isbn13) {
-    properties[mappings.isbn13] = {
-      rich_text: [
-        {
-          text: {
-            content: bookData.isbn13
-          }
+      case 'url':
+        const urlValue = String(value);
+        // Basic URL validation
+        if (urlValue.startsWith('http://') || urlValue.startsWith('https://')) {
+          return {
+            url: urlValue
+          };
         }
-      ]
-    };
-  }
+        return null;
 
-  // Description (rich text)
-  if (mappings.description && bookData.description) {
-    const truncatedDescription = bookData.description.length > 2000 
-      ? bookData.description.substring(0, 2000) + '...'
-      : bookData.description;
+      case 'files':
+        if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
+          return {
+            files: [
+              {
+                type: 'external',
+                name: 'Cover',
+                external: {
+                  url: value
+                }
+              }
+            ]
+          };
+        }
+        return null;
+
+      case 'checkbox':
+        return {
+          checkbox: Boolean(value)
+        };
+
+      default:
+        // Fallback to rich_text for unknown types
+        const fallbackContent = Array.isArray(value) ? value.join(', ') : String(value);
+        return {
+          rich_text: [
+            {
+              text: {
+                content: fallbackContent.substring(0, 2000)
+              }
+            }
+          ]
+        };
+    }
+  };
+
+  // Map book data to Notion properties using field mappings
+  const bookFieldMap = {
+    title: bookData.title,
+    authors: bookData.authors,
+    isbn: bookData.isbn13 || bookData.isbn10,
+    isbn13: bookData.isbn13,
+    isbn10: bookData.isbn10,
+    description: bookData.description,
+    categories: bookData.categories,
+    publishedDate: bookData.publishedDate,
+    publisher: bookData.publisher,
+    pageCount: bookData.pageCount,
+    thumbnail: bookData.thumbnail,
+    rating: bookData.averageRating,
+    language: bookData.language,
+    ratingsCount: bookData.ratingsCount
+  };
+
+  // Process each field mapping
+  for (const [bookField, notionPropertyName] of Object.entries(fieldMappings)) {
+    if (!notionPropertyName || !bookFieldMap[bookField]) continue;
+
+    const propertyType = getPropertyType(notionPropertyName);
     
-    properties[mappings.description] = {
-      rich_text: [
-        {
-          text: {
-            content: truncatedDescription
-          }
-        }
-      ]
-    };
-  }
+    // Skip if property doesn't exist in the database
+    if (!propertyType && databaseSchema?.properties) {
+      console.warn(`Property "${notionPropertyName}" does not exist in database. Skipping field "${bookField}".`);
+      continue;
+    }
+    
+    const formattedValue = formatPropertyValue(bookFieldMap[bookField], propertyType, notionPropertyName);
 
-  // Categories (multi-select or rich text)
-  if (mappings.categories && bookData.categories?.length > 0) {
-    properties[mappings.categories] = {
-      rich_text: [
-        {
-          text: {
-            content: bookData.categories.join(', ')
-          }
-        }
-      ]
-    };
-  }
-
-  // Published Date (date)
-  if (mappings.publishedDate && bookData.publishedDate) {
-    properties[mappings.publishedDate] = {
-      rich_text: [
-        {
-          text: {
-            content: bookData.publishedDate
-          }
-        }
-      ]
-    };
-  }
-
-  // Publisher (rich text)
-  if (mappings.publisher && bookData.publisher) {
-    properties[mappings.publisher] = {
-      rich_text: [
-        {
-          text: {
-            content: bookData.publisher
-          }
-        }
-      ]
-    };
-  }
-
-  // Page Count (number)
-  if (mappings.pageCount && bookData.pageCount) {
-    properties[mappings.pageCount] = {
-      number: parseInt(bookData.pageCount) || 0
-    };
-  }
-
-  // Cover/Thumbnail (files)
-  if (mappings.thumbnail && bookData.thumbnail) {
-    properties[mappings.thumbnail] = {
-      files: [
-        {
-          type: 'external',
-          name: 'Cover',
-          external: {
-            url: bookData.thumbnail
-          }
-        }
-      ]
-    };
-  }
-
-  // Rating (number)
-  if (mappings.rating && bookData.averageRating) {
-    properties[mappings.rating] = {
-      number: parseFloat(bookData.averageRating) || 0
-    };
+    if (formattedValue) {
+      properties[notionPropertyName] = formattedValue;
+    }
   }
 
   return properties;
@@ -558,9 +582,10 @@ router.post('/pages/book', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Database ID and book data are required' });
     }
 
-    const properties = formatBookDataForNotion(bookData, fieldMappings);
-    
     const token = await getNotionToken(req);
+    
+    // Format book data with proper type checking
+    const properties = await formatBookDataForNotion(bookData, fieldMappings, databaseId, token);
     
     const pageData = {
       parent: {
@@ -569,6 +594,9 @@ router.post('/pages/book', requireAuth, async (req, res) => {
       },
       properties
     };
+
+    console.log('Field mappings received:', JSON.stringify(fieldMappings, null, 2));
+    console.log('Creating Notion page with data:', JSON.stringify(pageData, null, 2));
 
     const response = await notionRequest(token, 'POST', '/pages', pageData);
     
@@ -584,6 +612,7 @@ router.post('/pages/book', requireAuth, async (req, res) => {
     console.error('Error creating book page:', error);
     
     if (error.response?.status === 400) {
+      console.error('Notion API validation error:', error.response.data);
       return res.status(400).json({ 
         error: 'Invalid book data or field mappings',
         details: error.response.data
@@ -602,7 +631,7 @@ router.post('/pages/book', requireAuth, async (req, res) => {
 router.get('/database/:databaseId/search', requireAuth, async (req, res) => {
   try {
     const { databaseId } = req.params;
-    const { isbn, title } = req.query;
+    const { isbn, title, fieldMappings } = req.query;
     
     if (!isbn && !title) {
       return res.status(400).json({ error: 'Either ISBN or title is required for search' });
@@ -610,27 +639,70 @@ router.get('/database/:databaseId/search', requireAuth, async (req, res) => {
 
     const token = await getNotionToken(req);
     
-    // Build search filter
+    // Parse field mappings if provided
+    let mappings = {};
+    if (fieldMappings) {
+      try {
+        mappings = JSON.parse(fieldMappings);
+      } catch (e) {
+        console.warn('Failed to parse field mappings:', e);
+      }
+    }
+
+    // Get database properties to find available fields
+    const database = await notionRequest(token, 'GET', `/databases/${databaseId}`);
+    const availableProperties = Object.keys(database.properties || {});
+    
+    // Determine which properties to search
+    const titleProperty = mappings.title || 'Title';
+    const isbnProperty = mappings.isbn || 'ISBN';
+    
+    // Build search filter only for properties that exist
     const filter = {
       or: []
     };
 
-    if (isbn) {
-      filter.or.push({
-        property: 'ISBN',
-        rich_text: {
-          contains: isbn
-        }
-      });
+    if (isbn && availableProperties.includes(isbnProperty)) {
+      const isbnProp = database.properties[isbnProperty];
+      if (isbnProp.type === 'rich_text') {
+        filter.or.push({
+          property: isbnProperty,
+          rich_text: {
+            contains: isbn
+          }
+        });
+      } else if (isbnProp.type === 'title') {
+        filter.or.push({
+          property: isbnProperty,
+          title: {
+            contains: isbn
+          }
+        });
+      }
     }
 
-    if (title) {
-      filter.or.push({
-        property: 'Title',
-        title: {
-          contains: title
-        }
-      });
+    if (title && availableProperties.includes(titleProperty)) {
+      const titleProp = database.properties[titleProperty];
+      if (titleProp.type === 'title') {
+        filter.or.push({
+          property: titleProperty,
+          title: {
+            contains: title
+          }
+        });
+      } else if (titleProp.type === 'rich_text') {
+        filter.or.push({
+          property: titleProperty,
+          rich_text: {
+            contains: title
+          }
+        });
+      }
+    }
+
+    // If no valid properties found, return empty results
+    if (filter.or.length === 0) {
+      return res.json({ books: [] });
     }
 
     const searchData = {
@@ -639,13 +711,37 @@ router.get('/database/:databaseId/search', requireAuth, async (req, res) => {
 
     const response = await notionRequest(token, 'POST', `/databases/${databaseId}/query`, searchData);
     
-    const books = response.results.map(page => ({
-      id: page.id,
-      url: page.url,
-      title: page.properties.Title?.title?.[0]?.plain_text || 'Untitled',
-      isbn: page.properties.ISBN?.rich_text?.[0]?.plain_text || '',
-      created_time: page.created_time
-    }));
+    const books = response.results.map(page => {
+      // Dynamically extract title and ISBN based on available properties
+      let bookTitle = 'Untitled';
+      let bookIsbn = '';
+      
+      if (availableProperties.includes(titleProperty)) {
+        const titleProp = page.properties[titleProperty];
+        if (titleProp?.title?.[0]?.plain_text) {
+          bookTitle = titleProp.title[0].plain_text;
+        } else if (titleProp?.rich_text?.[0]?.plain_text) {
+          bookTitle = titleProp.rich_text[0].plain_text;
+        }
+      }
+      
+      if (availableProperties.includes(isbnProperty)) {
+        const isbnProp = page.properties[isbnProperty];
+        if (isbnProp?.rich_text?.[0]?.plain_text) {
+          bookIsbn = isbnProp.rich_text[0].plain_text;
+        } else if (isbnProp?.title?.[0]?.plain_text) {
+          bookIsbn = isbnProp.title[0].plain_text;
+        }
+      }
+      
+      return {
+        id: page.id,
+        url: page.url,
+        title: bookTitle,
+        isbn: bookIsbn,
+        created_time: page.created_time
+      };
+    });
 
     res.json({ books });
 

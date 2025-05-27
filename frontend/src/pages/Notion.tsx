@@ -98,7 +98,7 @@ const Notion: React.FC = () => {
       const settings = await NotionService.getSettings();
       if (settings) {
         setNotionSettings(settings);
-        setSelectedDatabase(settings.databaseId);
+        setSelectedDatabase(settings.databaseId || '');
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
