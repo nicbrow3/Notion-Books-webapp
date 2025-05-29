@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { BookSearchResult, BookEdition, BookEditionsResponse } from '../types/book';
 import { NotionService } from '../services/notionService';
+import { BookService } from '../services/bookService';
 import { CreateNotionPageRequest } from '../types/notion';
 import { CategoryService, CategorySettings } from '../services/categoryService';
+import AudiobookSelectionModal from './AudiobookSelectionModal';
 
 interface BookDetailsModalProps {
   isOpen: boolean;
@@ -43,6 +45,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   const [showManualMappingModal, setShowManualMappingModal] = useState(false);
   const [manualMappingFrom, setManualMappingFrom] = useState<string>('');
   const [manualMappingTo, setManualMappingTo] = useState<string>('');
+  const [selectedPublishedDateType, setSelectedPublishedDateType] = useState<'original' | 'edition'>('original');
+  const [loadingAudiobook, setLoadingAudiobook] = useState(false);
+  const [showAudiobookSelectionModal, setShowAudiobookSelectionModal] = useState(false);
 
   const preserveSelectionsRef = useRef<boolean>(false);
 
@@ -149,8 +154,6 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         
         const uniqueCategories = Array.from(allEditionCategories);
         setRawCategories(uniqueCategories);
-        
-        toast.success(`Loaded ${result.data.editions.length} editions with ${uniqueCategories.length} total categories`);
       }
     } catch (error) {
       console.error('Error fetching editions:', error);
@@ -166,6 +169,36 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       fetchAllEditionsCategories();
     }
   }, [isOpen, currentBook.openLibraryKey, fetchAllEditionsCategories]);
+
+  // Fetch audiobook data when modal opens (only if not already loaded)
+  const fetchAudiobookData = useCallback(async () => {
+    setLoadingAudiobook(true);
+    try {
+      console.log(`🎧 Fetching audiobook data for: "${currentBook.title}"`);
+      const bookWithAudiobook = await BookService.getAudiobookData(currentBook);
+      setCurrentBook(bookWithAudiobook);
+      console.log(`🎧 Audiobook data loaded for: "${currentBook.title}"`);
+    } catch (error) {
+      console.error('❌ Failed to fetch audiobook data:', error);
+      // Set empty audiobook data on error
+      setCurrentBook(prev => ({
+        ...prev,
+        audiobookData: {
+          hasAudiobook: false,
+          source: 'error',
+          error: error instanceof Error ? error.message : 'Failed to fetch audiobook data'
+        }
+      }));
+    } finally {
+      setLoadingAudiobook(false);
+    }
+  }, [currentBook]);
+
+  useEffect(() => {
+    if (isOpen && !currentBook.audiobookData && !loadingAudiobook) {
+      fetchAudiobookData();
+    }
+  }, [isOpen, currentBook.audiobookData, loadingAudiobook, fetchAudiobookData]);
 
   const toggleCategory = (processedCategory: string) => {
     setSelectedCategories(prev => 
@@ -269,6 +302,19 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     }
   };
 
+  const handleAudiobookSelected = (audiobookData: any) => {
+    console.log(`🎧 User selected audiobook: "${audiobookData.title}"`);
+    setCurrentBook(prev => ({
+      ...prev,
+      audiobookData: audiobookData
+    }));
+    toast.success(`Audiobook selected: "${audiobookData.title}"`);
+  };
+
+  const openAudiobookSearch = () => {
+    setShowAudiobookSelectionModal(true);
+  };
+
   const checkForDuplicates = async () => {
     if (!isNotionConnected || !notionSettings?.databaseId) {
       return;
@@ -331,10 +377,17 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         }
       }
 
-      // Create book data with selected categories
+      // Create book data with selected categories and published date preference
       const bookDataWithSelectedCategories = {
         ...currentBook,
-        categories: selectedCategories
+        categories: selectedCategories,
+        // Override the published date based on user preference
+        publishedDate: selectedPublishedDateType === 'original' 
+          ? (currentBook.originalPublishedDate || currentBook.publishedDate)
+          : currentBook.publishedDate,
+        // Keep both dates available for field mapping
+        editionPublishedDate: currentBook.publishedDate,
+        originalPublishedDate: currentBook.originalPublishedDate
       };
 
       const request: CreateNotionPageRequest = {
@@ -347,10 +400,16 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       const createdPage = await NotionService.createPage(request);
       
       if (createdPage) {
+        const dateUsed = selectedPublishedDateType === 'original' 
+          ? (currentBook.originalPublishedDate ? 'original' : 'edition')
+          : 'edition';
+        
         toast.success(
           <div className="flex flex-col">
             <span className="font-medium">"{currentBook.title}" added to Notion!</span>
-            <span className="text-sm text-gray-600">{selectedCategories.length} categories included</span>
+            <span className="text-sm text-gray-600">
+              {selectedCategories.length} categories • {dateUsed} published date
+            </span>
             <a 
               href={createdPage.url} 
               target="_blank" 
@@ -398,8 +457,17 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-6xl w-full max-h-[95vh] overflow-hidden">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      <div 
+        className="bg-white rounded-lg max-w-6xl w-full max-h-[95vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -598,13 +666,346 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Audiobook Information */}
+            {(currentBook.audiobookData || loadingAudiobook) && (
+              <div className="mt-6">
+                <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.369 4.369 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
+                  </svg>
+                  Audiobook
+                  {loadingAudiobook && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                  )}
+                  {/* Search Button */}
+                  {!loadingAudiobook && currentBook.authors && currentBook.authors.length > 0 && (
+                    <button
+                      onClick={openAudiobookSearch}
+                      className="ml-auto px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                      title="Search for audiobook on Audnexus"
+                    >
+                      Search Audnexus
+                    </button>
+                  )}
+                </h4>
+                
+                {loadingAudiobook ? (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-purple-700">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                      <span className="text-sm">Searching for audiobook information...</span>
+                    </div>
+                  </div>
+                ) : currentBook.audiobookData?.hasAudiobook ? (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
+                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Available
+                      </span>
+                      {currentBook.audiobookData?.source && (
+                        <span className="text-xs text-purple-600 bg-purple-100 px-2 py-1 rounded">
+                          via {currentBook.audiobookData.source === 'audnexus' ? 'Audnexus' : currentBook.audiobookData.source}
+                        </span>
+                      )}
+                      {currentBook.audiobookData?.selectionContext?.userSelected && (
+                        <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                          User Selected
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Show selection context if user selected */}
+                    {currentBook.audiobookData?.selectionContext?.userSelected && (
+                      <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                        <p className="text-green-800">
+                          <span className="font-medium">Selected:</span> "{currentBook.audiobookData.selectionContext.selectedTitle}" 
+                          {currentBook.audiobookData.selectionContext.selectedAuthors && 
+                            ` by ${currentBook.audiobookData.selectionContext.selectedAuthors.join(', ')}`}
+                        </p>
+                        {(currentBook.audiobookData.selectionContext.selectedTitle !== currentBook.audiobookData.selectionContext.originalTitle ||
+                          (currentBook.audiobookData.selectionContext.selectedAuthors && 
+                           currentBook.audiobookData.selectionContext.selectedAuthors[0] !== currentBook.audiobookData.selectionContext.originalAuthor)) && (
+                          <p className="text-green-700 mt-1">
+                            <span className="font-medium">Original search:</span> "{currentBook.audiobookData.selectionContext.originalTitle}" 
+                            by {currentBook.audiobookData.selectionContext.originalAuthor}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      {currentBook.audiobookData?.narrators && currentBook.audiobookData.narrators.length > 0 && (
+                        <div>
+                          <span className="font-medium text-purple-900">Narrator{currentBook.audiobookData.narrators.length > 1 ? 's' : ''}:</span>
+                          <p className="text-purple-700">{currentBook.audiobookData.narrators.join(', ')}</p>
+                        </div>
+                      )}
+                      
+                      {currentBook.audiobookData?.totalDurationHours && (
+                        <div>
+                          <span className="font-medium text-purple-900">Duration:</span>
+                          <p className="text-purple-700">
+                            {currentBook.audiobookData.totalDurationHours < 1 
+                              ? `${Math.round(currentBook.audiobookData.totalDurationHours * 60)} min`
+                              : `${currentBook.audiobookData.totalDurationHours.toFixed(1)} hrs`}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {currentBook.audiobookData?.chapterCount && (
+                        <div>
+                          <span className="font-medium text-purple-900">Chapters:</span>
+                          <p className="text-purple-700">{currentBook.audiobookData.chapterCount}</p>
+                        </div>
+                      )}
+                      
+                      {currentBook.audiobookData?.rating && (
+                        <div>
+                          <span className="font-medium text-purple-900">Audiobook Rating:</span>
+                          <p className="text-purple-700">
+                            {currentBook.audiobookData.rating}/5
+                            {currentBook.audiobookData.ratingCount && ` (${currentBook.audiobookData.ratingCount} reviews)`}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {currentBook.audiobookData?.publisher && currentBook.audiobookData.publisher !== currentBook.publisher && (
+                        <div>
+                          <span className="font-medium text-purple-900">Audio Publisher:</span>
+                          <p className="text-purple-700">{currentBook.audiobookData.publisher}</p>
+                        </div>
+                      )}
+
+                      {currentBook.audiobookData?.asin && (
+                        <div>
+                          <span className="font-medium text-purple-900">ASIN:</span>
+                          <p className="text-purple-700 font-mono text-xs">{currentBook.audiobookData.asin}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Author information if we only found the author but not specific book */}
+                    {currentBook.audiobookData?.authorFound && currentBook.audiobookData.authorInfo && (
+                      <div className="mt-3 pt-3 border-t border-purple-200">
+                        <p className="text-sm text-purple-700">
+                          <span className="font-medium">Author found on Audnexus:</span> {currentBook.audiobookData.authorInfo.name}
+                        </p>
+                        {currentBook.audiobookData.authorInfo.description && (
+                          <p className="text-xs text-purple-600 mt-1 line-clamp-2">
+                            {currentBook.audiobookData.authorInfo.description}
+                          </p>
+                        )}
+                        {currentBook.audiobookData.authorInfo.genres && currentBook.audiobookData.authorInfo.genres.length > 0 && (
+                          <p className="text-xs text-purple-600 mt-1">
+                            <span className="font-medium">Genres:</span> {currentBook.audiobookData.authorInfo.genres.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Genres from audiobook source */}
+                    {currentBook.audiobookData?.genres && currentBook.audiobookData.genres.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-purple-200">
+                        <span className="font-medium text-purple-900 text-sm">Audio Genres:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {currentBook.audiobookData.genres.slice(0, 5).map((genre, index) => (
+                            <span
+                              key={index}
+                              className="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded"
+                            >
+                              {typeof genre === 'string' ? genre : (genre as any)?.name || 'Unknown Genre'}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show search limitation and suggestion */}
+                    {(currentBook.audiobookData.searchLimitation || currentBook.audiobookData.suggestion) && (
+                      <div className="mb-2 space-y-1">
+                        {currentBook.audiobookData.searchLimitation && (
+                          <p className="text-xs text-gray-600">{currentBook.audiobookData.searchLimitation}</p>
+                        )}
+                        {currentBook.audiobookData.suggestion && (
+                          <p className="text-xs text-gray-600 font-medium">💡 {currentBook.audiobookData.suggestion}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Show API limitation explanation */}
+                    {(currentBook.audiobookData.searchLimitation || currentBook.audiobookData.apiLimitation) && (
+                      <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-yellow-800 mb-1">API Limitation</p>
+                            <p className="text-xs text-yellow-700">
+                              {currentBook.audiobookData.searchLimitation || currentBook.audiobookData.apiLimitation}
+                            </p>
+                            {currentBook.audiobookData.suggestion && (
+                              <p className="text-xs text-yellow-700 mt-1 font-medium">
+                                💡 {currentBook.audiobookData.suggestion}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Google Audiobook Hints */}
+                    {currentBook.audiobookData.googleHint && (
+                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-green-800 mb-1">Google Books Suggestion</p>
+                            <p className="text-xs text-green-700 mb-1">
+                              {currentBook.audiobookData.googleHint.reason}
+                            </p>
+                            <p className="text-xs text-green-600">
+                              {currentBook.audiobookData.googleHint.message}
+                            </p>
+                            <div className="mt-2">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Confidence: {currentBook.audiobookData.googleHint.confidence}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Google Audiobook Hints (when displayed separately) */}
+                    {currentBook.googleAudiobookHints && !currentBook.audiobookData.googleHint && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-blue-800 mb-1">Google Books Indicators</p>
+                            <div className="text-xs text-blue-700 space-y-1">
+                              {currentBook.googleAudiobookHints.markedAsAudiobook && (
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                  Marked as audiobook in Google Books
+                                </div>
+                              )}
+                              {currentBook.googleAudiobookHints.textToSpeechAllowed && (
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                  Text-to-speech enabled
+                                </div>
+                              )}
+                              {currentBook.googleAudiobookHints.hasAudioLinks && (
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                  Contains audiobook-related links
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-2">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Confidence: {currentBook.googleAudiobookHints.confidence}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : currentBook.audiobookData ? (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-gray-600 mb-2">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm font-medium">
+                        {currentBook.audiobookData.source === 'error' 
+                          ? 'Error checking audiobook availability' 
+                          : currentBook.audiobookData.authorFound
+                            ? 'Author found, but audiobook not discoverable'
+                            : 'No audiobook found'}
+                      </span>
+                    </div>
+
+                    {/* Show author information if found */}
+                    {currentBook.audiobookData.authorFound && (
+                      <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-sm font-medium text-blue-800">
+                            Author found on Audnexus: {currentBook.audiobookData.authorInfo?.name || 'Unknown'}
+                          </span>
+                        </div>
+                        
+                        {currentBook.audiobookData.authorInfo?.description && (
+                          <p className="text-xs text-blue-700 mb-2 line-clamp-2">
+                            {currentBook.audiobookData.authorInfo.description}
+                          </p>
+                        )}
+                        
+                        {currentBook.audiobookData.authorInfo?.genres && currentBook.audiobookData.authorInfo.genres.length > 0 && (
+                          <div className="mb-2">
+                            <span className="text-xs font-medium text-blue-800">Author genres:</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {currentBook.audiobookData.authorInfo.genres.slice(0, 3).map((genre, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded"
+                                >
+                                  {genre}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Show error message */}
+                    {currentBook.audiobookData.error && (
+                      <p className="text-xs text-gray-600 mb-2">{currentBook.audiobookData.error}</p>
+                    )}
+
+                    {/* Show search limitation and suggestion */}
+                    {(currentBook.audiobookData.searchLimitation || currentBook.audiobookData.suggestion) && (
+                      <div className="mb-2 space-y-1">
+                        {currentBook.audiobookData.searchLimitation && (
+                          <p className="text-xs text-gray-600">{currentBook.audiobookData.searchLimitation}</p>
+                        )}
+                        {currentBook.audiobookData.suggestion && (
+                          <p className="text-xs text-gray-600 font-medium">💡 {currentBook.audiobookData.suggestion}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
 
           {/* Right Panel - Categories Management */}
           <div className="w-1/2 p-6 overflow-y-auto">
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-gray-900">Categories & Subjects</h4>
+                <h4 className="font-medium text-gray-900">Categories</h4>
                 <div className="flex gap-2">
                   <button
                     onClick={selectAllCategories}
@@ -634,8 +1035,18 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                   className={`flex items-center justify-between p-3 rounded border transition-colors ${
                     category.isIgnored 
                       ? 'border-red-200 bg-red-50' 
-                      : 'border-gray-200 hover:bg-gray-50'
+                      : 'border-gray-200 hover:bg-gray-50 cursor-pointer'
                   }`}
+                  onClick={(e) => {
+                    // Only toggle if not clicking on buttons or interactive elements
+                    const target = e.target as HTMLElement;
+                    if (!category.isIgnored && 
+                        !target.closest('button') && 
+                        !target.closest('input') && 
+                        !target.closest('a')) {
+                      toggleCategory(category.processed);
+                    }
+                  }}
                 >
                   <div className="flex items-center flex-1">
                     {!category.isIgnored && (
@@ -647,7 +1058,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                       />
                     )}
                     
-                    <div className="flex-1">
+                    <div 
+                      className="flex-1"
+                    >
                       <div className="flex items-center gap-2">
                         <span className={`text-sm ${category.isIgnored ? 'text-red-600 line-through' : 'text-gray-700'}`}>
                           {category.processed}
@@ -759,7 +1172,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                             title={category.mappedFrom ? `Remove mapping: "${category.mappedFrom}" → "${category.processed}"` : `Remove all mappings to "${category.processed}"`}
                           >
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                             </svg>
                           </button>
                         )}
@@ -927,6 +1340,143 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
               </div>
             )}
 
+            {/* Field Mappings & Settings */}
+            {isNotionConnected && notionSettings?.fieldMapping && (
+              <div className="border-t border-gray-200 pt-6 mb-6">
+                <h4 className="font-medium text-gray-900 mb-4">Notion Field Mappings</h4>
+                
+                {/* Published Date Selection */}
+                {(currentBook.originalPublishedDate || currentBook.publishedDate) && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Published Date to Use:
+                    </label>
+                    <select
+                      value={selectedPublishedDateType}
+                      onChange={(e) => setSelectedPublishedDateType(e.target.value as 'original' | 'edition')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    >
+                      {currentBook.originalPublishedDate && (
+                        <option value="original">
+                          Original Published Date ({formatDate(currentBook.originalPublishedDate)})
+                        </option>
+                      )}
+                      {currentBook.publishedDate && (
+                        <option value="edition">
+                          Edition Published Date ({formatDate(currentBook.publishedDate)})
+                        </option>
+                      )}
+                    </select>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {selectedPublishedDateType === 'original' 
+                        ? 'Using the original publication date (first edition)'
+                        : 'Using this specific edition\'s publication date'
+                      }
+                    </p>
+                  </div>
+                )}
+
+                {/* Field Mappings Display */}
+                <div className="space-y-2">
+                  {(() => {
+                    const mappingElements: JSX.Element[] = [];
+                    
+                    Object.entries(notionSettings.fieldMapping).forEach(([bookField, notionField]) => {
+                      // Skip pageIcon and published date fields (handled by dropdown above)
+                      if (!notionField || bookField === 'pageIcon' || bookField === 'publishedDate' || bookField === 'originalPublishedDate') return;
+                      
+                      const notionFieldName = String(notionField);
+                      
+                      // Get the actual value that will be sent
+                      let bookValue = '';
+                      switch (bookField) {
+                        case 'title':
+                          bookValue = currentBook.title || '';
+                          break;
+                        case 'authors':
+                          bookValue = formatAuthors(currentBook.authors);
+                          break;
+                        case 'description':
+                          bookValue = currentBook.description ? 
+                            (currentBook.description.length > 100 ? 
+                              currentBook.description.substring(0, 100) + '...' : 
+                              currentBook.description) : '';
+                          break;
+                        case 'isbn':
+                          bookValue = currentBook.isbn13 || currentBook.isbn10 || '';
+                          break;
+                        case 'publisher':
+                          bookValue = currentBook.publisher || '';
+                          break;
+                        case 'pageCount':
+                          bookValue = currentBook.pageCount ? currentBook.pageCount.toString() : '';
+                          break;
+                        case 'categories':
+                          bookValue = selectedCategories.length > 0 ? 
+                            `${selectedCategories.length} selected` : 'None selected';
+                          break;
+                        case 'rating':
+                          bookValue = currentBook.averageRating ? 
+                            currentBook.averageRating.toString() : '';
+                          break;
+                        case 'thumbnail':
+                          bookValue = currentBook.thumbnail ? 'Available' : 'None';
+                          break;
+                        case 'status':
+                          bookValue = 'To Read (default)';
+                          break;
+                        case 'notes':
+                          bookValue = 'Empty (default)';
+                          break;
+                        default:
+                          bookValue = '';
+                      }
+
+                      if (bookValue) {
+                        mappingElements.push(
+                          <div key={bookField} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded text-sm">
+                            <div className="flex-1">
+                              <span className="font-medium text-gray-700 capitalize">
+                                {bookField.replace(/([A-Z])/g, ' $1').trim()}:
+                              </span>
+                              <span className="ml-2 text-gray-600">{bookValue}</span>
+                            </div>
+                            <div className="flex items-center text-xs text-gray-500">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                              </svg>
+                              <span className="font-medium">{notionFieldName}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                    });
+                    
+                    return mappingElements;
+                  })()}
+                </div>
+
+                {/* Page Icon Setting */}
+                {notionSettings.fieldMapping.pageIcon && currentBook.thumbnail && (
+                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-sm">
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-green-800 font-medium">Book cover will be used as page icon</span>
+                    </div>
+                  </div>
+                )}
+
+                {Object.keys(notionSettings.fieldMapping).filter(key => notionSettings.fieldMapping[key] && key !== 'pageIcon').length === 0 && (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    <p>No field mappings configured</p>
+                    <p className="text-xs mt-1">Configure mappings in Settings to see what data will be sent to Notion</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Notion Actions */}
             {isNotionConnected && notionSettings?.databaseId && (
               <div className="border-t border-gray-200 pt-4">
@@ -981,9 +1531,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                   
                   <button
                     onClick={addToNotion}
-                    disabled={isAddingToNotion || selectedCategories.length === 0}
+                    disabled={isAddingToNotion}
                     className={`flex-1 px-4 py-2 text-sm rounded font-medium ${
-                      isAddingToNotion || selectedCategories.length === 0
+                      isAddingToNotion
                         ? 'bg-gray-400 text-white cursor-not-allowed'
                         : 'bg-black text-white hover:bg-gray-800'
                     }`}
@@ -994,7 +1544,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                         Adding to Notion...
                       </span>
                     ) : (
-                      `Add to Notion (${selectedCategories.length} categories)`
+                      selectedCategories.length > 0 
+                        ? `Add to Notion (${selectedCategories.length} categories)`
+                        : 'Add to Notion'
                     )}
                   </button>
                 </div>
@@ -1023,7 +1575,10 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       {/* Manual Mapping Modal */}
       {showManualMappingModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div 
+            className="bg-white rounded-lg max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Manual Category Mapping
             </h3>
@@ -1114,8 +1669,19 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Audiobook Selection Modal */}
+      {showAudiobookSelectionModal && (
+        <AudiobookSelectionModal
+          isOpen={showAudiobookSelectionModal}
+          onClose={() => setShowAudiobookSelectionModal(false)}
+          bookTitle={currentBook.title}
+          bookAuthor={currentBook.authors?.[0] || ''}
+          onAudiobookSelected={handleAudiobookSelected}
+        />
+      )}
     </div>
   );
 };
 
-export default BookDetailsModal; 
+export default BookDetailsModal;

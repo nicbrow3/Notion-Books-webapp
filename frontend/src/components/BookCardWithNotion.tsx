@@ -29,6 +29,8 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
     if (onSelect) {
       onSelect(book);
     }
+    // Also open the details modal to speed up the workflow
+    setShowDetailsModal(true);
   };
 
   const formatAuthors = (authors: string[]) => {

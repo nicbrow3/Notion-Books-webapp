@@ -1,3 +1,95 @@
+export interface AudiobookData {
+  hasAudiobook: boolean;
+  source: string;
+  title?: string;
+  authors?: string[];
+  narrators?: string[];
+  duration?: string;
+  chapters?: number;
+  chapterCount?: number; // Alternative name for chapters
+  totalDurationHours?: number; // Duration in hours
+  totalDurationMinutes?: number; // Duration in minutes
+  totalDurationMs?: number; // Duration in milliseconds
+  publisher?: string;
+  publishedDate?: string;
+  description?: string;
+  image?: string;
+  rating?: number;
+  ratingCount?: number;
+  genres?: string[];
+  series?: string;
+  seriesPosition?: string;
+  language?: string;
+  asin?: string;
+  audibleUrl?: string;
+  
+  // User selection context
+  selectionContext?: {
+    originalTitle: string;
+    originalAuthor: string;
+    selectedTitle: string;
+    selectedAuthors: string[];
+    userSelected: boolean;
+  };
+  
+  // Author information when book not found but author exists
+  authorFound?: boolean;
+  authorInfo?: {
+    name: string;
+    description?: string;
+    image?: string;
+    genres?: string[];
+    similarAuthors?: string[];
+  };
+  
+  // API limitation messaging
+  searchLimitation?: string;
+  suggestion?: string;
+  apiLimitation?: string;
+  error?: string;
+  
+  // Google Books audiobook hints
+  googleHint?: {
+    suggestsAudiobook: boolean;
+    confidence: 'low' | 'medium' | 'high';
+    reason: string;
+    message: string;
+  };
+}
+
+export interface GoogleAudiobookHints {
+  textToSpeechAllowed: boolean;
+  markedAsAudiobook: boolean;
+  hasAudioLinks: boolean;
+  confidence: 'low' | 'medium' | 'high';
+  source: 'google_books_api';
+}
+
+export interface Book {
+  id: string;
+  title: string;
+  authors: string[];
+  description?: string;
+  publishedDate?: string;
+  pageCount?: number;
+  categories?: string[];
+  averageRating?: number;
+  ratingsCount?: number;
+  thumbnail?: string;
+  isbn10?: string;
+  isbn13?: string;
+  language?: string;
+  publisher?: string;
+  source?: string;
+  rawData?: any;
+  
+  // Audiobook data
+  audiobookData?: AudiobookData;
+  
+  // Google audiobook hints
+  googleAudiobookHints?: GoogleAudiobookHints;
+}
+
 export interface BookSearchResult {
   id: string;
   title: string;
@@ -27,7 +119,11 @@ export interface BookSearchResult {
     subjects?: string[];
     rawSubjects?: string[];
   };
+  audiobookData?: AudiobookData; // Add audiobook information
   rawData?: any; // Keep original data for debugging
+  
+  // Google audiobook hints
+  googleAudiobookHints?: GoogleAudiobookHints;
 }
 
 export interface BookSearchResponse {

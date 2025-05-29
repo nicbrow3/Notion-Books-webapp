@@ -1,4 +1,4 @@
-import { BookSearchResponse, SearchParams } from '../types/book';
+import { BookSearchResponse, SearchParams, BookSearchResult } from '../types/book';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
@@ -9,7 +9,8 @@ export class BookService {
     const searchParams = new URLSearchParams({
       q: query,
       type,
-      limit: limit.toString()
+      limit: limit.toString(),
+      includeAudiobooks: 'false' // Don't include audiobooks in main search for performance
     });
 
     const response = await fetch(`${API_BASE_URL}/api/books/search?${searchParams}`, {
@@ -38,6 +39,52 @@ export class BookService {
     } else {
       throw new Error(result.message || 'Invalid response format');
     }
+  }
+
+  static async getAudiobookData(book: BookSearchResult): Promise<BookSearchResult> {
+    const searchParams = new URLSearchParams({
+      q: book.title,
+      type: 'title',
+      limit: '1',
+      includeAudiobooks: 'true'
+    });
+
+    const response = await fetch(`${API_BASE_URL}/api/books/search?${searchParams}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    if (result.success && result.data && result.data.books.length > 0) {
+      // Find the best matching book from the results
+      const matchingBook = result.data.books.find((b: BookSearchResult) => 
+        b.title.toLowerCase() === book.title.toLowerCase() && 
+        b.authors.some(author => book.authors.includes(author))
+      ) || result.data.books[0];
+
+      // Return the original book with audiobook data added
+      return {
+        ...book,
+        audiobookData: matchingBook.audiobookData
+      };
+    }
+
+    // If no audiobook data found, return original book with empty audiobook data
+    return {
+      ...book,
+      audiobookData: {
+        hasAudiobook: false,
+        source: 'none'
+      }
+    };
   }
 
   static async testConnection(): Promise<{ success: boolean; message: string }> {

@@ -1,10 +1,12 @@
 const axios = require('axios');
 const googleBooksService = require('./googleBooksService');
+const AudiobookService = require('./audiobookService');
 
 class BookSearchService {
   constructor() {
     this.openLibraryBaseURL = 'https://openlibrary.org/search.json';
     this.openLibraryWorksURL = 'https://openlibrary.org/works';
+    this.audiobookService = new AudiobookService();
   }
 
   /**
@@ -12,9 +14,10 @@ class BookSearchService {
    * @param {string} query - Search query
    * @param {string} searchType - Type of search (isbn, title, author, general)
    * @param {number} maxResults - Maximum number of results
+   * @param {boolean} includeAudiobooks - Whether to enrich results with audiobook data
    * @returns {Promise<Object>} Enhanced book data with merged results from both APIs
    */
-  async searchBooks(query, searchType = 'general', maxResults = 10) {
+  async searchBooks(query, searchType = 'general', maxResults = 10, includeAudiobooks = false) {
     try {
       console.log(`🔍 Starting enhanced search for: "${query}" (type: ${searchType})`);
       
@@ -33,6 +36,8 @@ class BookSearchService {
       console.log(`📊 Google Books found: ${googleResult.books?.length || 0} results`);
       console.log(`📊 Open Library found: ${openLibraryResult.books?.length || 0} results`);
 
+      let finalBooks = [];
+
       // If Google Books has good results, enhance them with Open Library data
       if (googleResult.success && googleResult.books.length > 0) {
         const enhancedGoogleBooks = await Promise.all(
@@ -41,40 +46,57 @@ class BookSearchService {
 
         // If Open Library also has results, merge and deduplicate
         if (openLibraryResult.success && openLibraryResult.books.length > 0) {
-          const mergedBooks = this.mergeAndRankResults(enhancedGoogleBooks, openLibraryResult.books, query);
-          
-          return {
-            success: true,
-            totalItems: Math.max(googleResult.totalItems || 0, openLibraryResult.totalItems || 0),
-            books: mergedBooks.slice(0, maxResults),
-            source: 'merged_apis',
-            sources: ['google_books', 'open_library']
-          };
+          finalBooks = this.mergeAndRankResults(enhancedGoogleBooks, openLibraryResult.books, query);
+        } else {
+          finalBooks = enhancedGoogleBooks;
         }
-
-        return {
-          ...googleResult,
-          books: enhancedGoogleBooks,
-          source: 'google_books_enhanced'
-        };
-      }
-
-      // If Google Books failed but Open Library has results, use Open Library
-      if (openLibraryResult.success && openLibraryResult.books.length > 0) {
+      } else if (openLibraryResult.success && openLibraryResult.books.length > 0) {
+        // If Google Books failed but Open Library has results, use Open Library
         console.log('📚 Using Open Library as primary source');
-        return {
-          ...openLibraryResult,
-          source: 'open_library_primary'
-        };
+        finalBooks = openLibraryResult.books;
       }
 
-      // Both failed
+      // Enrich with audiobook data if requested
+      if (includeAudiobooks && finalBooks.length > 0) {
+        console.log('🎧 Enriching results with audiobook data...');
+        
+        // First, add Google audiobook hints
+        const booksWithGoogleHints = await Promise.all(
+          finalBooks.map(book => this.enhanceWithGoogleAudiobookHints(book))
+        );
+        
+        // Then enrich with Audnexus data
+        finalBooks = await Promise.all(
+          booksWithGoogleHints.map(book => this.audiobookService.enrichWithAudiobookData(book))
+        );
+        
+        // Count how many books have audiobook data
+        const audiobookCount = finalBooks.filter(book => 
+          book.audiobookData?.hasAudiobook || book.googleAudiobookHints
+        ).length;
+        
+        console.log(`🎧 Found audiobook data for ${audiobookCount} books`);
+      }
+
+      // Determine source
+      let source = 'no_results';
+      if (finalBooks.length > 0) {
+        if (googleResult.success && openLibraryResult.success) {
+          source = 'merged_apis';
+        } else if (googleResult.success) {
+          source = 'google_books_enhanced';
+        } else {
+          source = 'open_library_primary';
+        }
+      }
+
       return {
         success: true,
-        totalItems: 0,
-        books: [],
-        source: 'no_results',
-        message: 'No results found from either Google Books or Open Library'
+        totalItems: Math.max(googleResult.totalItems || 0, openLibraryResult.totalItems || 0),
+        books: finalBooks.slice(0, maxResults),
+        source: source,
+        sources: googleResult.success && openLibraryResult.success ? ['google_books', 'open_library'] : undefined,
+        message: finalBooks.length === 0 ? 'No results found from either Google Books or Open Library' : undefined
       };
 
     } catch (error) {
@@ -745,14 +767,46 @@ class BookSearchService {
     
     const split = [];
     categories.forEach(category => {
-      if (typeof category === 'string' && category.includes(',')) {
-        // Split by comma and clean each part
-        const parts = category.split(',')
+      if (typeof category === 'string') {
+        let parts = [category];
+        
+        // Split by comma first
+        if (category.includes(',')) {
+          parts = category.split(',');
+        }
+        
+        // Then split each part by ampersand and "and"
+        const finalParts = [];
+        parts.forEach(part => {
+          let subParts = [part];
+          
+          // Split by ampersand
+          if (part.includes('&')) {
+            subParts = part.split('&');
+          }
+          
+          // Then split each subpart by " and " (with spaces to avoid splitting words like "brand")
+          const andSplitParts = [];
+          subParts.forEach(subPart => {
+            if (subPart.toLowerCase().includes(' and ')) {
+              const andParts = subPart.split(/ and /i) // Case insensitive split
+                .map(p => p.trim())
+                .filter(p => p.length > 0);
+              andSplitParts.push(...andParts);
+            } else {
+              andSplitParts.push(subPart.trim());
+            }
+          });
+          
+          finalParts.push(...andSplitParts);
+        });
+        
+        // Clean and filter parts
+        const cleanedParts = finalParts
           .map(part => part.trim())
           .filter(part => part.length > 0 && part.length < 50);
-        split.push(...parts);
-      } else if (typeof category === 'string' && category.trim().length > 0) {
-        split.push(category.trim());
+        
+        split.push(...cleanedParts);
       }
     });
     
@@ -767,6 +821,51 @@ class BookSearchService {
                category.length > 2 && 
                category.length < 50;
       });
+  }
+
+  /**
+   * Check Google Books API for audiobook-related information
+   * @param {Object} book - Book object with Google Books data
+   * @returns {Object} Enhanced book with Google audiobook hints
+   */
+  async enhanceWithGoogleAudiobookHints(book) {
+    try {
+      // If we have Google Books data, check for audiobook hints
+      if (book.source?.includes('google') && book.rawData?.googleBooks) {
+        const googleData = book.rawData.googleBooks;
+        
+        // Check for text-to-speech permission (indicates potential audiobook availability)
+        const textToSpeechAllowed = googleData.accessInfo?.textToSpeechPermission === 'ALLOWED';
+        
+        // Check if this is marked as an audiobook in Google's system
+        const isAudiobook = googleData.volumeInfo?.printType === 'AUDIOBOOK' || 
+                           googleData.volumeInfo?.categories?.some(cat => 
+                             cat.toLowerCase().includes('audiobook')
+                           );
+        
+        // Look for audiobook-related links
+        const hasAudioLinks = googleData.saleInfo?.buyLink?.includes('audiobook') ||
+                             googleData.volumeInfo?.infoLink?.includes('audiobook');
+        
+        // Add Google audiobook hints to the book
+        if (textToSpeechAllowed || isAudiobook || hasAudioLinks) {
+          book.googleAudiobookHints = {
+            textToSpeechAllowed,
+            markedAsAudiobook: isAudiobook,
+            hasAudioLinks,
+            confidence: isAudiobook ? 'high' : textToSpeechAllowed ? 'medium' : 'low',
+            source: 'google_books_api'
+          };
+          
+          console.log(`🎧 Google audiobook hints for "${book.title}": ${JSON.stringify(book.googleAudiobookHints)}`);
+        }
+      }
+      
+      return book;
+    } catch (error) {
+      console.warn('⚠️ Failed to enhance with Google audiobook hints:', error.message);
+      return book;
+    }
   }
 }
 

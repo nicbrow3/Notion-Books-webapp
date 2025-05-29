@@ -5,6 +5,7 @@ const router = express.Router();
 const googleBooksService = require('../services/googleBooksService');
 const bookSearchService = require('../services/bookSearchService');
 const bookSuggestionService = require('../services/bookSuggestionService');
+const AudiobookService = require('../services/audiobookService');
 
 // Database connection
 const { Pool } = require('pg');
@@ -244,10 +245,11 @@ router.get('/editions/:workKey', async (req, res) => {
  * - q: search query (required)
  * - type: search type (isbn, title, author, general) - default: general
  * - limit: max results (1-40) - default: 10
+ * - includeAudiobooks: whether to enrich with audiobook data (true/false) - default: false
  */
 router.get('/search', async (req, res) => {
   try {
-    const { q: query, type = 'general', limit = 10 } = req.query;
+    const { q: query, type = 'general', limit = 10, includeAudiobooks = 'false' } = req.query;
 
     // Validation
     if (!query || query.trim() === '') {
@@ -270,11 +272,14 @@ router.get('/search', async (req, res) => {
 
     // Validate limit
     const maxResults = Math.min(Math.max(parseInt(limit) || 10, 1), 40);
+    
+    // Parse includeAudiobooks parameter
+    const shouldIncludeAudiobooks = includeAudiobooks === 'true' || includeAudiobooks === true;
 
-    console.log(`📚 Book search request: "${query}" (type: ${type}, limit: ${maxResults})`);
+    console.log(`📚 Book search request: "${query}" (type: ${type}, limit: ${maxResults}${shouldIncludeAudiobooks ? ', with audiobooks' : ''})`);
 
-    // Search books using enhanced service with original publication dates
-    const result = await bookSearchService.searchBooks(query, type, maxResults);
+    // Search books using enhanced service with original publication dates and optional audiobook data
+    const result = await bookSearchService.searchBooks(query, type, maxResults, shouldIncludeAudiobooks);
 
     // Log search results
     console.log(`✅ Found ${result.books.length} books for query: "${query}"`);
@@ -286,6 +291,14 @@ router.get('/search', async (req, res) => {
     if (booksWithOriginalDates.length > 0) {
       console.log(`📅 Enhanced ${booksWithOriginalDates.length} books with original publication dates`);
     }
+    
+    // Log audiobook enrichment results
+    if (shouldIncludeAudiobooks) {
+      const booksWithAudiobooks = result.books.filter(book => 
+        book.audiobookData && book.audiobookData.hasAudiobook
+      );
+      console.log(`🎧 Found audiobook data for ${booksWithAudiobooks.length} books`);
+    }
 
     res.json({
       success: true,
@@ -296,7 +309,8 @@ router.get('/search', async (req, res) => {
         returnedItems: result.books.length,
         books: result.books,
         source: result.source,
-        enhancedWithOriginalDates: booksWithOriginalDates.length
+        enhancedWithOriginalDates: booksWithOriginalDates.length,
+        includeAudiobooks: shouldIncludeAudiobooks
       }
     });
 
@@ -386,6 +400,110 @@ router.get('/:id', async (req, res) => {
       success: false,
       error: 'Failed to Fetch Book Details',
       message: 'An error occurred while fetching book details. Please try again.'
+    });
+  }
+});
+
+// Search for audiobook matches for user selection
+router.get('/audiobook-search/:title/:author', async (req, res) => {
+  try {
+    const { title, author } = req.params;
+    
+    console.log(`🔍 API: Searching audiobooks for user selection: "${title}" by ${author}`);
+    
+    const audiobookService = new AudiobookService();
+    const searchResults = await audiobookService.searchAudnexusForUserSelection(title, author);
+    
+    res.json({
+      success: searchResults.success,
+      data: searchResults.success ? {
+        searchQuery: searchResults.searchQuery,
+        results: searchResults.results,
+        totalAuthors: searchResults.totalAuthors,
+        message: searchResults.message
+      } : null,
+      error: searchResults.success ? null : searchResults.error,
+      suggestion: searchResults.suggestion
+    });
+    
+  } catch (error) {
+    console.error('❌ Audiobook search API error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to search for audiobooks',
+      details: error.message
+    });
+  }
+});
+
+// Get audiobook details by ASIN (for user selection)
+router.get('/audiobook/:asin', async (req, res) => {
+  try {
+    const { asin } = req.params;
+    const { title, author } = req.query;
+    
+    console.log(`🎯 API: Getting audiobook by ASIN: ${asin}`);
+    
+    const audiobookService = new AudiobookService();
+    const audiobook = await audiobookService.getSelectedAudiobook(asin, title, author);
+    
+    if (audiobook) {
+      res.json({
+        success: true,
+        data: audiobook
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: `Audiobook with ASIN ${asin} not found`
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Get audiobook API error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get audiobook details',
+      details: error.message
+    });
+  }
+});
+
+// Manual ASIN lookup endpoint
+router.post('/audiobook/manual-lookup', async (req, res) => {
+  try {
+    const { asin, title, author } = req.body;
+    
+    if (!asin) {
+      return res.status(400).json({
+        success: false,
+        error: 'ASIN is required'
+      });
+    }
+    
+    console.log(`🎯 API: Manual ASIN lookup: ${asin} for "${title}" by ${author}`);
+    
+    const audiobookService = new AudiobookService();
+    const audiobook = await audiobookService.getSelectedAudiobook(asin, title, author);
+    
+    if (audiobook) {
+      res.json({
+        success: true,
+        data: audiobook
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: `No audiobook found with ASIN ${asin}. Please check the ASIN and try again.`
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Manual ASIN lookup API error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to lookup audiobook by ASIN',
+      details: error.message
     });
   }
 });
