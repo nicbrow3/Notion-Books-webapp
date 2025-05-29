@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const fileStorage = require('../utils/fileStorage');
 
 // Database connection (optional for personal use)
 const { Pool } = require('pg');
@@ -410,9 +411,27 @@ router.get('/notion-settings', requireAuth, async (req, res) => {
           }
         });
       } catch (dbError) {
-        console.log('Database check failed, using session data:', dbError.message);
-        // Fall through to session-based storage
+        console.log('Database check failed, trying file storage:', dbError.message);
+        // Fall through to file storage
       }
+    }
+
+    // Try file storage as fallback
+    try {
+      const userKey = `user_settings_${req.session.userId || req.session.notionUserId || 'default'}`;
+      const fileSettings = await fileStorage.get(userKey);
+      
+      if (fileSettings) {
+        console.log('📁 Using file storage for settings');
+        return res.json({
+          success: true,
+          data: {
+            settings: fileSettings
+          }
+        });
+      }
+    } catch (fileError) {
+      console.log('File storage check failed, using session data:', fileError.message);
     }
 
     // Use session-based storage when database is not available
@@ -492,12 +511,42 @@ router.put('/notion-settings', requireAuth, async (req, res) => {
           }
         });
       } catch (dbError) {
-        console.log('Database storage failed, using session-only storage:', dbError.message);
-        // Fall through to session-based storage
+        console.log('Database storage failed, trying file storage:', dbError.message);
+        // Fall through to file storage
       }
     }
 
-    // Use session-based storage when database is not available
+    // Try file storage as fallback
+    try {
+      const userKey = `user_settings_${req.session.userId || req.session.notionUserId || 'default'}`;
+      const settingsToStore = {
+        databaseId: databaseId || null,
+        fieldMapping: fieldMapping || {},
+        defaultValues: defaultValues || {},
+        workspaceName: req.session.notionWorkspaceName || null,
+        email: req.session.notionEmail || null,
+        updatedAt: new Date().toISOString()
+      };
+
+      const stored = await fileStorage.set(userKey, settingsToStore);
+      
+      if (stored) {
+        console.log('📁 Settings saved to file storage');
+        // Also update session for immediate use
+        req.session.notionSettings = settingsToStore;
+        
+        return res.json({
+          success: true,
+          data: {
+            settings: settingsToStore
+          }
+        });
+      }
+    } catch (fileError) {
+      console.log('File storage failed, using session-only storage:', fileError.message);
+    }
+
+    // Use session-based storage as final fallback
     req.session.notionSettings = {
       databaseId: databaseId || null,
       fieldMapping: fieldMapping || {},

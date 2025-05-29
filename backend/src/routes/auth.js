@@ -27,20 +27,51 @@ router.post('/setup', async (req, res) => {
     }
 
     // Test the token by making a request to Notion API
-    const response = await axios.get('https://api.notion.com/v1/users/me', {
+    const userResponse = await axios.get('https://api.notion.com/v1/users/me', {
       headers: {
         'Authorization': `Bearer ${integrationToken}`,
         'Notion-Version': '2022-06-28',
       }
     });
 
-    const user = response.data;
+    const integrationUser = userResponse.data;
     
-    // Store user information in session (with optional database storage)
-    let userId = 1; // Default user ID for personal use
+    // For personal integrations, get workspace info by listing users to find the workspace owner
+    let workspaceInfo = {
+      name: 'Personal Workspace',
+      owner: null
+    };
+    
+    try {
+      const usersResponse = await axios.get('https://api.notion.com/v1/users', {
+        headers: {
+          'Authorization': `Bearer ${integrationToken}`,
+          'Notion-Version': '2022-06-28',
+        }
+      });
+      
+      // Find the workspace owner (person type user)
+      const owner = usersResponse.data.results.find(user => user.type === 'person');
+      if (owner) {
+        workspaceInfo.owner = owner;
+        workspaceInfo.name = owner.name ? `${owner.name}'s Workspace` : 'Personal Workspace';
+      }
+    } catch (workspaceError) {
+      console.warn('Could not fetch workspace info:', workspaceError.message);
+    }
+    
+    // Check if this is a first-time connection
+    let isFirstTime = false;
+    let userId = 1;
     
     if (pool) {
       try {
+        // Check if user already exists
+        const existingUserQuery = 'SELECT id FROM users WHERE notion_user_id = $1';
+        const existingUserResult = await pool.query(existingUserQuery, [integrationUser.id]);
+        
+        isFirstTime = existingUserResult.rows.length === 0;
+        
         // Store or update user information in database if available
         const userQuery = `
           INSERT INTO users (notion_user_id, notion_access_token, notion_workspace_name, email)
@@ -53,33 +84,40 @@ router.post('/setup', async (req, res) => {
         `;
 
         const userResult = await pool.query(userQuery, [
-          user.id,
+          integrationUser.id,
           integrationToken,
-          user.name || 'Personal Workspace',
-          user.person?.email || null
+          workspaceInfo.name,
+          workspaceInfo.owner?.person?.email || null
         ]);
         
         userId = userResult.rows[0].id;
       } catch (dbError) {
         console.warn('Database storage failed, using session-only storage:', dbError.message);
+        // For session-only storage, check if session already exists
+        isFirstTime = !req.session.userId;
       }
+    } else {
+      // For session-only storage, check if session already exists
+      isFirstTime = !req.session.userId;
     }
 
     // Store user session
     req.session.userId = userId;
-    req.session.notionUserId = user.id;
+    req.session.notionUserId = integrationUser.id;
     req.session.notionToken = integrationToken;
     req.session.userData = {
-      id: user.id,
-      name: user.name,
-      workspace_name: user.name || 'Personal Workspace',
-      email: user.person?.email
+      id: integrationUser.id,
+      name: workspaceInfo.owner?.name || 'User',
+      workspace_name: workspaceInfo.name,
+      email: workspaceInfo.owner?.person?.email,
+      owner: workspaceInfo.owner
     };
 
     res.json({
       success: true,
       message: 'Successfully connected to Notion',
-      user: req.session.userData
+      user: req.session.userData,
+      isFirstTime: isFirstTime
     });
 
   } catch (error) {
@@ -100,38 +138,133 @@ router.post('/setup', async (req, res) => {
 // Check authentication status
 router.get('/status', async (req, res) => {
   try {
-    if (!req.session.userId || !req.session.userData) {
-      return res.json({ authenticated: false });
+    // If already authenticated, return session data
+    if (req.session.userId && req.session.userData) {
+      // Optionally verify with database if available
+      if (pool) {
+        try {
+          const userQuery = 'SELECT notion_user_id, notion_workspace_name, email FROM users WHERE id = $1';
+          const userResult = await pool.query(userQuery, [req.session.userId]);
+
+          if (userResult.rows.length === 0) {
+            // Fall back to session data if database record not found
+            console.warn('User not found in database, using session data');
+          } else {
+            // Update session with database data, but preserve owner info from session
+            const dbUser = userResult.rows[0];
+            req.session.userData = {
+              ...req.session.userData, // Preserve existing owner info
+              id: dbUser.notion_user_id,
+              workspace_name: dbUser.notion_workspace_name,
+              email: dbUser.email
+            };
+          }
+        } catch (dbError) {
+          console.warn('Database check failed, using session data:', dbError.message);
+        }
+      }
+      
+      return res.json({
+        authenticated: true,
+        user: req.session.userData
+      });
     }
 
-    // For personal use, we can rely on session data
-    // Optionally verify with database if available
-    if (pool) {
+    // If not authenticated but integration token is configured, auto-authenticate
+    const integrationToken = process.env.NOTION_INTEGRATION_TOKEN;
+    
+    if (integrationToken) {
       try {
-        const userQuery = 'SELECT notion_user_id, notion_workspace_name, email FROM users WHERE id = $1';
-        const userResult = await pool.query(userQuery, [req.session.userId]);
+        // Test the token by making a request to Notion API
+        const userResponse = await axios.get('https://api.notion.com/v1/users/me', {
+          headers: {
+            'Authorization': `Bearer ${integrationToken}`,
+            'Notion-Version': '2022-06-28',
+          }
+        });
 
-        if (userResult.rows.length === 0) {
-          // Fall back to session data if database record not found
-          console.warn('User not found in database, using session data');
-        } else {
-          // Update session with database data
-          const dbUser = userResult.rows[0];
-          req.session.userData = {
-            id: dbUser.notion_user_id,
-            workspace_name: dbUser.notion_workspace_name,
-            email: dbUser.email
-          };
+        const integrationUser = userResponse.data;
+        
+        // For personal integrations, get workspace info by listing users to find the workspace owner
+        let workspaceInfo = {
+          name: 'Personal Workspace',
+          owner: null
+        };
+        
+        try {
+          const usersResponse = await axios.get('https://api.notion.com/v1/users', {
+            headers: {
+              'Authorization': `Bearer ${integrationToken}`,
+              'Notion-Version': '2022-06-28',
+            }
+          });
+          
+          // Find the workspace owner (person type user)
+          const owner = usersResponse.data.results.find(user => user.type === 'person');
+          if (owner) {
+            workspaceInfo.owner = owner;
+            workspaceInfo.name = owner.name ? `${owner.name}'s Workspace` : 'Personal Workspace';
+          }
+        } catch (workspaceError) {
+          console.warn('Could not fetch workspace info:', workspaceError.message);
         }
-      } catch (dbError) {
-        console.warn('Database check failed, using session data:', dbError.message);
+        
+        let userId = 1;
+        
+        if (pool) {
+          try {
+            // Store or update user information in database if available
+            const userQuery = `
+              INSERT INTO users (notion_user_id, notion_access_token, notion_workspace_name, email)
+              VALUES ($1, $2, $3, $4)
+              ON CONFLICT (notion_user_id) 
+              DO UPDATE SET 
+                notion_access_token = EXCLUDED.notion_access_token,
+                updated_at = CURRENT_TIMESTAMP
+              RETURNING id, notion_user_id, notion_workspace_name, email;
+            `;
+
+            const userResult = await pool.query(userQuery, [
+              integrationUser.id,
+              integrationToken,
+              workspaceInfo.name,
+              workspaceInfo.owner?.person?.email || null
+            ]);
+            
+            userId = userResult.rows[0].id;
+          } catch (dbError) {
+            console.warn('Database storage failed, using session-only storage:', dbError.message);
+          }
+        }
+
+        // Store user session
+        req.session.userId = userId;
+        req.session.notionUserId = integrationUser.id;
+        req.session.notionToken = integrationToken;
+        req.session.userData = {
+          id: integrationUser.id,
+          name: workspaceInfo.owner?.name || 'User',
+          workspace_name: workspaceInfo.name,
+          email: workspaceInfo.owner?.person?.email,
+          owner: workspaceInfo.owner
+        };
+
+        console.log('Auto-authenticated user with Notion integration token');
+        
+        return res.json({
+          authenticated: true,
+          user: req.session.userData,
+          autoAuthenticated: true
+        });
+
+      } catch (error) {
+        console.error('Auto-authentication failed:', error);
+        // If auto-auth fails, fall through to return not authenticated
       }
     }
     
-    res.json({
-      authenticated: true,
-      user: req.session.userData
-    });
+    // No session and no valid token, return not authenticated
+    res.json({ authenticated: false });
 
   } catch (error) {
     console.error('Error checking auth status:', error);

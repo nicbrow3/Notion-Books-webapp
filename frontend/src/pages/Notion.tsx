@@ -1,213 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import NotionAuth from '../components/NotionAuth';
+import { NotionService } from '../services/notionService';
+import { BookService } from '../services/bookService';
+import { NotionIntegrationSettings } from '../types/notion';
+import { BookSearchResult, SearchParams } from '../types/book';
 import SearchForm from '../components/SearchForm';
 import BookCardWithNotion from '../components/BookCardWithNotion';
-import { BookService } from '../services/bookService';
-import { NotionService } from '../services/notionService';
-import { BookSearchResult, BookSearchResponse, SearchParams } from '../types/book';
-import { NotionDatabase, NotionIntegrationSettings, BookToNotionMapping } from '../types/notion';
+import NotionAuth from '../components/NotionAuth';
 
 const Notion: React.FC = () => {
   // Authentication state
   const [isNotionConnected, setIsNotionConnected] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [notionUser, setNotionUser] = useState<any>(null);
-
-  // Database and settings state
-  const [databases, setDatabases] = useState<NotionDatabase[]>([]);
-  const [selectedDatabase, setSelectedDatabase] = useState<string>('');
-  const [databaseProperties, setDatabaseProperties] = useState<any>(null);
   const [notionSettings, setNotionSettings] = useState<NotionIntegrationSettings | null>(null);
 
   // Search state
-  const [searchResults, setSearchResults] = useState<BookSearchResponse | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<any>(null);
   const [selectedBook, setSelectedBook] = useState<BookSearchResult | null>(null);
 
-  // Loading states
-  const [isLoadingDatabases, setIsLoadingDatabases] = useState(false);
-  const [isLoadingProperties, setIsLoadingProperties] = useState(false);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-
-  // Load initial data when Notion is connected
+  // Load initial data
   useEffect(() => {
     if (isNotionConnected) {
-      loadDatabases();
       loadSettings();
     }
   }, [isNotionConnected]);
 
-  // Load database properties when database is selected
-  useEffect(() => {
-    if (selectedDatabase) {
-      loadDatabaseProperties(selectedDatabase);
-    }
-  }, [selectedDatabase]);
-
   const handleAuthChange = (authenticated: boolean, user?: any) => {
     setIsNotionConnected(authenticated);
-    setNotionUser(user);
-    
-    if (!authenticated) {
-      // Reset all state when disconnected
-      setDatabases([]);
-      setSelectedDatabase('');
-      setDatabaseProperties(null);
+    if (authenticated) {
+      loadSettings();
+    } else {
       setNotionSettings(null);
       setSearchResults(null);
       setSelectedBook(null);
     }
   };
 
-  const loadDatabases = async () => {
-    try {
-      setIsLoadingDatabases(true);
-      const databaseList = await NotionService.getDatabases();
-      setDatabases(databaseList);
-      
-      if (databaseList.length === 0) {
-        toast('No databases found. Make sure you have shared at least one database with this integration.', {
-          icon: 'ℹ️',
-          duration: 5000,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to load databases:', error);
-      toast.error('Failed to load Notion databases');
-    } finally {
-      setIsLoadingDatabases(false);
-    }
-  };
-
-  const loadDatabaseProperties = async (databaseId: string) => {
-    try {
-      setIsLoadingProperties(true);
-      const properties = await NotionService.getDatabaseProperties(databaseId);
-      setDatabaseProperties(properties);
-    } catch (error) {
-      console.error('Failed to load database properties:', error);
-      toast.error('Failed to load database properties');
-    } finally {
-      setIsLoadingProperties(false);
-    }
-  };
-
   const loadSettings = async () => {
     try {
       const settings = await NotionService.getSettings();
-      if (settings) {
-        setNotionSettings(settings);
-        setSelectedDatabase(settings.databaseId || '');
-      }
+      setNotionSettings(settings);
     } catch (error) {
       console.error('Failed to load settings:', error);
       // Don't show error toast for missing settings - it's expected for new users
     }
   };
 
-  const saveSettings = async () => {
-    if (!selectedDatabase || !databaseProperties) {
-      toast.error('Please select a database first');
-      return;
-    }
-
-    try {
-      setIsSavingSettings(true);
-
-      // Use suggested mappings if available, otherwise fall back to manual detection
-      let fieldMapping: BookToNotionMapping;
-      
-      if (databaseProperties.suggestedMappings && Object.keys(databaseProperties.suggestedMappings).length > 0) {
-        // Convert suggested mappings to the format expected by NotionIntegrationSettings
-        const mappings = databaseProperties.suggestedMappings;
-        fieldMapping = {
-          title: (!mappings.title?.ignored && mappings.title?.notionProperty) || findPropertyByType('title') || 'Title',
-          authors: (!mappings.authors?.ignored && mappings.authors?.notionProperty) || findPropertyByType('rich_text') || 'Authors',
-          description: (!mappings.description?.ignored && mappings.description?.notionProperty) || findPropertyByName('description') || findPropertyByType('rich_text', 1),
-          isbn: (!mappings.isbn13?.ignored && mappings.isbn13?.notionProperty) || (!mappings.isbn10?.ignored && mappings.isbn10?.notionProperty) || findPropertyByName('isbn') || findPropertyByType('rich_text', 2),
-          publishedDate: (!mappings.publishedDate?.ignored && mappings.publishedDate?.notionProperty) || findPropertyByType('date') || 'Published Date',
-          publisher: (!mappings.publisher?.ignored && mappings.publisher?.notionProperty) || findPropertyByName('publisher') || findPropertyByType('rich_text', 3),
-          pageCount: (!mappings.pageCount?.ignored && mappings.pageCount?.notionProperty) || findPropertyByType('number') || 'Page Count',
-          categories: (!mappings.categories?.ignored && mappings.categories?.notionProperty) || findPropertyByType('multi_select') || 'Categories',
-          rating: (!mappings.averageRating?.ignored && mappings.averageRating?.notionProperty) || findPropertyByName('rating') || findPropertyByType('number', 1),
-          thumbnail: (!mappings.thumbnail?.ignored && mappings.thumbnail?.notionProperty) || findPropertyByType('url') || 'Cover URL',
-          status: findPropertyByName('status') || findPropertyByType('select'),
-          notes: findPropertyByName('notes') || findPropertyByType('rich_text', 4),
-        };
-      } else {
-        // Fallback to manual detection
-        fieldMapping = {
-          title: findPropertyByType('title') || 'Title',
-          authors: findPropertyByType('rich_text') || 'Authors',
-          description: findPropertyByName('description') || findPropertyByType('rich_text', 1),
-          isbn: findPropertyByName('isbn') || findPropertyByType('rich_text', 2),
-          publishedDate: findPropertyByType('date') || 'Published Date',
-          publisher: findPropertyByName('publisher') || findPropertyByType('rich_text', 3),
-          pageCount: findPropertyByType('number') || 'Page Count',
-          categories: findPropertyByType('multi_select') || 'Categories',
-          rating: findPropertyByName('rating') || findPropertyByType('number', 1),
-          thumbnail: findPropertyByType('url') || 'Cover URL',
-          status: findPropertyByName('status') || findPropertyByType('select'),
-          notes: findPropertyByName('notes') || findPropertyByType('rich_text', 4),
-        };
-      }
-
-      const settings: NotionIntegrationSettings = {
-        databaseId: selectedDatabase,
-        fieldMapping,
-        defaultValues: {},
-        autoAddBooks: false,
-      };
-
-      await NotionService.saveSettings(settings);
-      setNotionSettings(settings);
-      
-      const mappingCount = Object.values(fieldMapping).filter(Boolean).length;
-      toast.success(`Notion settings saved! ${mappingCount} field mappings configured.`);
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      toast.error('Failed to save Notion settings');
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const findPropertyByType = (type: string, index: number = 0): string | undefined => {
-    if (!databaseProperties?.properties) return undefined;
-    
-    const properties = databaseProperties.properties
-      .filter((prop: any) => prop.type === type);
-    
-    return properties[index]?.name;
-  };
-
-  const findPropertyByName = (name: string): string | undefined => {
-    if (!databaseProperties?.properties) return undefined;
-    
-    const lowerName = name.toLowerCase();
-    return databaseProperties.properties
-      .find((prop: any) => prop.name.toLowerCase().includes(lowerName))?.name;
-  };
-
   const handleSearch = async (params: SearchParams) => {
-    setIsSearching(true);
-    setSearchResults(null);
-    setSelectedBook(null);
-
     try {
+      setIsSearching(true);
+      setSearchResults(null);
+      setSelectedBook(null);
+      
       const results = await BookService.searchBooks(params);
       setSearchResults(results);
-      
-      if (!results.books || results.books.length === 0) {
-        toast.error('No books found for your search query');
-      } else {
-        toast.success(`Found ${results.books.length} book${results.books.length === 1 ? '' : 's'}`);
-      }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      toast.error(`Search failed: ${errorMessage}`);
-      console.error('Search error:', error);
+      console.error('Search failed:', error);
+      toast.error('Failed to search books');
     } finally {
       setIsSearching(false);
     }
@@ -218,194 +67,77 @@ const Notion: React.FC = () => {
     toast.success(`Selected: ${book.title}`);
   };
 
-  const renderDatabaseSelection = () => {
-    if (!isNotionConnected) return null;
-
-    return (
-      <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Database Configuration</h2>
-        
-        {isLoadingDatabases ? (
-          <div className="flex items-center justify-center py-8">
-            <svg className="animate-spin h-8 w-8 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span className="text-gray-600">Loading databases...</span>
-          </div>
-        ) : databases.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Databases Found</h3>
-            <p className="text-gray-600 mb-4">
-              You need to share at least one database with this Notion integration.
-            </p>
-            <button
-              onClick={loadDatabases}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Refresh Databases
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="database-select" className="block text-sm font-medium text-gray-700 mb-2">
-                Select Database for Books
-              </label>
-              <select
-                id="database-select"
-                value={selectedDatabase}
-                onChange={(e) => setSelectedDatabase(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Choose a database...</option>
-                {databases.map((db) => (
-                  <option key={db.id} value={db.id}>
-                    {db.title || 'Untitled Database'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedDatabase && (
-              <div className="mt-4">
-                {isLoadingProperties ? (
-                  <div className="flex items-center py-4">
-                    <svg className="animate-spin h-5 w-5 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="text-gray-600">Loading database properties...</span>
-                  </div>
-                ) : databaseProperties ? (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-4">Database Properties & Field Mapping</h4>
-                    
-                    {/* Show suggested field mappings if available */}
-                    {databaseProperties.suggestedMappings && Object.keys(databaseProperties.suggestedMappings).length > 0 && (
-                      <div className="mb-6">
-                        <h5 className="font-medium text-gray-800 mb-3">🎯 Suggested Field Mappings</h5>
-                        <div className="space-y-2">
-                          {Object.entries(databaseProperties.suggestedMappings).map(([googleField, mapping]: [string, any]) => (
-                            <div key={googleField} className="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-200">
-                              <div className="flex items-center space-x-3">
-                                <span className="text-sm font-medium text-blue-600 capitalize">
-                                  {googleField.replace(/([A-Z])/g, ' $1').trim()}
-                                </span>
-                                <span className="text-gray-400">→</span>
-                                <span className="text-sm font-medium text-gray-900">
-                                  {mapping.notionProperty}
-                                </span>
-                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                  {mapping.notionType}
-                                </span>
-                              </div>
-                              <div className="flex items-center space-x-3">
-                                <div className="flex items-center space-x-2">
-                                  <div className={`w-2 h-2 rounded-full ${
-                                    mapping.confidence >= 80 ? 'bg-green-500' : 
-                                    mapping.confidence >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                                  }`}></div>
-                                  <span className="text-xs text-gray-500">{mapping.confidence}%</span>
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    // Toggle ignore status for this field
-                                    const updatedMappings = { ...databaseProperties.suggestedMappings };
-                                    updatedMappings[googleField] = {
-                                      ...mapping,
-                                      ignored: !mapping.ignored
-                                    };
-                                    setDatabaseProperties({
-                                      ...databaseProperties,
-                                      suggestedMappings: updatedMappings
-                                    });
-                                  }}
-                                  className={`text-xs px-2 py-1 rounded transition-colors ${
-                                    mapping.ignored 
-                                      ? 'bg-red-100 text-red-700 hover:bg-red-200' 
-                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                  }`}
-                                  title={mapping.ignored ? 'Click to include this field' : 'Click to ignore this field'}
-                                >
-                                  {mapping.ignored ? '🚫 Ignored' : '👁️ Include'}
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-3 text-xs text-gray-500">
-                          💡 Tip: Click "Include/Ignored" to control which fields get populated from Google Books data
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Show all database properties */}
-                    <div className="mb-4">
-                      <h5 className="font-medium text-gray-800 mb-3">📋 All Database Properties</h5>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                        {databaseProperties.properties.map((prop: any) => (
-                          <div key={prop.name} className="flex items-center space-x-2">
-                            <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
-                            <span className="text-gray-700">{prop.name}</span>
-                            <span className="text-gray-500 text-xs">({prop.type})</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        onClick={saveSettings}
-                        disabled={isSavingSettings}
-                        className={`px-4 py-2 rounded-md font-medium ${
-                          isSavingSettings
-                            ? 'bg-gray-400 text-white cursor-not-allowed'
-                            : 'bg-green-600 text-white hover:bg-green-700'
-                        }`}
-                      >
-                        {isSavingSettings ? 'Saving...' : 'Save Configuration'}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const renderSearchSection = () => {
-    if (!isNotionConnected || !notionSettings) {
+    if (!isNotionConnected) {
       return (
         <div className="bg-gray-50 rounded-lg p-8 text-center">
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {!isNotionConnected ? 'Connect to Notion First' : 'Configure Database First'}
+            Connect to Notion First
           </h3>
           <p className="text-gray-600">
-            {!isNotionConnected 
-              ? 'Please connect your Notion account to start searching and adding books.'
-              : 'Please select and configure a database before searching for books.'
-            }
+            Please connect your Notion account to start searching and adding books.
           </p>
+        </div>
+      );
+    }
+
+    if (!notionSettings || !notionSettings.databaseId) {
+      return (
+        <div className="bg-yellow-50 rounded-lg p-8 text-center border border-yellow-200">
+          <div className="flex items-center justify-center mb-4">
+            <svg className="h-12 w-12 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-yellow-900 mb-2">
+            Configure Database Settings
+          </h3>
+          <p className="text-yellow-700 mb-4">
+            Please configure your database and field mappings in Settings before searching for books.
+          </p>
+          <a
+            href="/settings"
+            className="inline-flex items-center px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors"
+          >
+            <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Go to Settings
+          </a>
         </div>
       );
     }
 
     return (
       <div className="space-y-6">
+        {/* Configuration Status */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span className="text-green-800 font-medium">
+                Ready to search and add books!
+              </span>
+            </div>
+            <a
+              href="/settings"
+              className="text-green-700 hover:text-green-800 text-sm font-medium underline"
+            >
+              Edit Settings
+            </a>
+          </div>
+        </div>
+
+        {/* Search Form */}
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Search Books</h2>
           <SearchForm onSearch={handleSearch} isLoading={isSearching} />
         </div>
 
+        {/* Loading State */}
         {isSearching && (
           <div className="flex justify-center py-8">
             <div className="flex items-center space-x-2">
@@ -418,6 +150,7 @@ const Notion: React.FC = () => {
           </div>
         )}
 
+        {/* Search Results */}
         {searchResults && (
           <div>
             <div className="flex items-center justify-between mb-6">
@@ -429,7 +162,7 @@ const Notion: React.FC = () => {
 
             {searchResults.books && searchResults.books.length > 0 ? (
               <div className="space-y-4">
-                {searchResults.books.map((book) => (
+                {searchResults.books.map((book: BookSearchResult) => (
                   <BookCardWithNotion
                     key={book.id}
                     book={book}
@@ -447,6 +180,7 @@ const Notion: React.FC = () => {
           </div>
         )}
 
+        {/* Selected Book Debug Info */}
         {selectedBook && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
             <h3 className="text-lg font-semibold text-blue-900 mb-4">
@@ -489,7 +223,6 @@ const Notion: React.FC = () => {
 
       <div className="space-y-6">
         <NotionAuth onAuthChange={handleAuthChange} />
-        {renderDatabaseSelection()}
         {renderSearchSection()}
       </div>
     </div>

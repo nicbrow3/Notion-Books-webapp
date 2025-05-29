@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { BookSearchResult } from '../types/book';
+import { BookSearchResult, BookEdition } from '../types/book';
 import { NotionService } from '../services/notionService';
-import { CreateNotionPageRequest } from '../types/notion';
+import BookEditionsModal from './BookEditionsModal';
+import BookDetailsModal from './BookDetailsModal';
 
 interface BookCardWithNotionProps {
   book: BookSearchResult;
@@ -17,9 +18,12 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
   isNotionConnected,
   notionSettings 
 }) => {
-  const [isAddingToNotion, setIsAddingToNotion] = useState(false);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [duplicateStatus, setDuplicateStatus] = useState<'unknown' | 'checking' | 'duplicate' | 'unique'>('unknown');
+  const [existingNotionPage, setExistingNotionPage] = useState<{ url: string; title: string } | null>(null);
+  const [showEditionsModal, setShowEditionsModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [currentBook, setCurrentBook] = useState<BookSearchResult>(book);
 
   const handleClick = () => {
     if (onSelect) {
@@ -62,12 +66,17 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
 
       if (existingBooks.length > 0) {
         setDuplicateStatus('duplicate');
+        setExistingNotionPage({
+          url: existingBooks[0].url,
+          title: existingBooks[0].title
+        });
         toast(`This book already exists in your Notion database (${existingBooks.length} match${existingBooks.length > 1 ? 'es' : ''})`, {
           icon: '⚠️',
           duration: 4000,
         });
       } else {
         setDuplicateStatus('unique');
+        setExistingNotionPage(null);
       }
     } catch (error) {
       console.error('Duplicate check failed:', error);
@@ -78,53 +87,49 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
     }
   };
 
-  const addToNotion = async () => {
-    if (!isNotionConnected || !notionSettings) {
-      toast.error('Please connect to Notion and configure your settings first');
-      return;
-    }
+  const handleSelectEdition = (edition: BookEdition) => {
+    // Merge categories from original book and selected edition
+    const originalCategories = currentBook.categories || [];
+    const editionCategories = edition.categories || [];
+    
+    // Combine and deduplicate categories
+    const allCategories = [...originalCategories, ...editionCategories];
+    const uniqueCategories = Array.from(new Set(allCategories.map(cat => cat.toLowerCase())))
+      .map(lowerCat => allCategories.find(cat => cat.toLowerCase() === lowerCat))
+      .filter(Boolean) as string[];
 
-    try {
-      setIsAddingToNotion(true);
+    // Convert BookEdition to BookSearchResult format
+    const editionAsBook: BookSearchResult = {
+      ...currentBook, // Keep original data as base
+      id: edition.id,
+      title: edition.title,
+      subtitle: edition.subtitle,
+      authors: edition.authors,
+      publisher: edition.publisher,
+      publishedDate: edition.publishedDate,
+      isbn13: edition.isbn13,
+      isbn10: edition.isbn10,
+      pageCount: edition.pageCount,
+      language: edition.language,
+      thumbnail: edition.thumbnail,
+      description: edition.description || currentBook.description, // Keep original description if edition doesn't have one
+      categories: uniqueCategories, // Use merged and deduplicated categories
+      infoLink: edition.infoLink,
+      source: 'open_library_edition',
+      openLibraryKey: edition.openLibraryKey,
+      // Keep other data from original book
+      originalPublishedDate: currentBook.originalPublishedDate,
+      openLibraryData: currentBook.openLibraryData
+    };
 
-      // Check for duplicates first if not already checked
-      if (duplicateStatus === 'unknown') {
-        await checkForDuplicates();
-      }
-
-      // If duplicate found, ask for confirmation
-      if (duplicateStatus === 'duplicate') {
-        const confirmed = window.confirm(
-          'This book already exists in your Notion database. Do you want to add it anyway?'
-        );
-        if (!confirmed) {
-          setIsAddingToNotion(false);
-          return;
-        }
-      }
-
-      const request: CreateNotionPageRequest = {
-        databaseId: notionSettings.databaseId,
-        bookData: book,
-        fieldMapping: notionSettings.fieldMapping,
-        customValues: notionSettings.defaultValues
-      };
-
-      const createdPage = await NotionService.createPage(request);
-      
-      if (createdPage) {
-        toast.success(`"${book.title}" added to Notion successfully!`);
-        setDuplicateStatus('duplicate'); // Mark as added
-      } else {
-        throw new Error('Failed to create page');
-      }
-    } catch (error) {
-      console.error('Add to Notion failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast.error(`Failed to add book to Notion: ${errorMessage}`);
-    } finally {
-      setIsAddingToNotion(false);
-    }
+    setCurrentBook(editionAsBook);
+    setDuplicateStatus('unknown'); // Reset duplicate status for new edition
+    
+    // Enhanced toast message with category info
+    const categoryInfo = editionCategories.length > 0 
+      ? ` (${editionCategories.length} additional categories merged)`
+      : '';
+    toast.success(`Selected edition: ${edition.title} (${edition.publishedDate || 'Unknown year'})${categoryInfo}`);
   };
 
   const renderNotionActions = () => {
@@ -158,12 +163,26 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
           )}
           
           {duplicateStatus === 'duplicate' && (
-            <span className="text-xs text-orange-600 flex items-center">
-              <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              May be duplicate
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-orange-600 flex items-center">
+                <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                May be duplicate
+              </span>
+              {existingNotionPage && (
+                <a
+                  href={existingNotionPage.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                  title={`View "${existingNotionPage.title}" in Notion`}
+                >
+                  View in Notion →
+                </a>
+              )}
+            </div>
           )}
           
           {duplicateStatus === 'unique' && (
@@ -193,26 +212,11 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              addToNotion();
+              setShowDetailsModal(true);
             }}
-            disabled={isAddingToNotion}
-            className={`px-3 py-1 text-xs rounded font-medium ${
-              isAddingToNotion
-                ? 'bg-gray-400 text-white cursor-not-allowed'
-                : 'bg-black text-white hover:bg-gray-800'
-            }`}
+            className="px-3 py-1 text-xs rounded font-medium bg-black text-white hover:bg-gray-800"
           >
-            {isAddingToNotion ? (
-              <span className="flex items-center">
-                <svg className="animate-spin h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Adding...
-              </span>
-            ) : (
-              'Add to Notion'
-            )}
+            View Details & Add to Notion
           </button>
         </div>
       </div>
@@ -229,10 +233,10 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
       <div className="flex gap-4">
         {/* Book Cover */}
         <div className="flex-shrink-0">
-          {book.thumbnail ? (
+          {currentBook.thumbnail ? (
             <img
-              src={book.thumbnail}
-              alt={`Cover of ${book.title}`}
+              src={currentBook.thumbnail}
+              alt={`Cover of ${currentBook.title}`}
               className="w-24 h-32 object-cover rounded shadow-sm"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
@@ -249,62 +253,72 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
         {/* Book Details */}
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
-            {book.title}
-            {book.subtitle && (
-              <span className="text-gray-600 font-normal">: {book.subtitle}</span>
+            {currentBook.title}
+            {currentBook.subtitle && (
+              <span className="text-gray-600 font-normal">: {currentBook.subtitle}</span>
             )}
           </h3>
           
           <p className="text-sm text-gray-600 mb-2">
-            by {formatAuthors(book.authors)}
+            by {formatAuthors(currentBook.authors)}
           </p>
 
-          {book.description && (
+          {currentBook.description && (
             <p className="text-sm text-gray-700 mb-3 line-clamp-3">
-              {book.description}
+              {currentBook.description}
             </p>
           )}
 
           {/* Metadata Grid */}
           <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
-            {book.publishedDate && (
+            {currentBook.originalPublishedDate && (
               <div>
-                <span className="font-medium">Published:</span> {formatDate(book.publishedDate)}
+                <span className="font-medium">First Published:</span> {formatDate(currentBook.originalPublishedDate)}
               </div>
             )}
-            {book.publisher && (
+            {currentBook.publishedDate && currentBook.originalPublishedDate !== currentBook.publishedDate && (
               <div>
-                <span className="font-medium">Publisher:</span> {book.publisher}
+                <span className="font-medium">This Edition:</span> {formatDate(currentBook.publishedDate)}
               </div>
             )}
-            {book.pageCount && (
+            {currentBook.publishedDate && !currentBook.originalPublishedDate && (
               <div>
-                <span className="font-medium">Pages:</span> {book.pageCount}
+                <span className="font-medium">Published:</span> {formatDate(currentBook.publishedDate)}
               </div>
             )}
-            {book.language && (
+            {currentBook.publisher && (
               <div>
-                <span className="font-medium">Language:</span> {book.language.toUpperCase()}
+                <span className="font-medium">Publisher:</span> {currentBook.publisher}
               </div>
             )}
-            {book.isbn13 && (
+            {currentBook.pageCount && (
               <div>
-                <span className="font-medium">ISBN-13:</span> {book.isbn13}
+                <span className="font-medium">Pages:</span> {currentBook.pageCount}
               </div>
             )}
-            {book.isbn10 && (
+            {currentBook.language && (
               <div>
-                <span className="font-medium">ISBN-10:</span> {book.isbn10}
+                <span className="font-medium">Language:</span> {currentBook.language.toUpperCase()}
+              </div>
+            )}
+            {currentBook.isbn13 && (
+              <div>
+                <span className="font-medium">ISBN-13:</span> {currentBook.isbn13}
+              </div>
+            )}
+            {currentBook.isbn10 && (
+              <div>
+                <span className="font-medium">ISBN-10:</span> {currentBook.isbn10}
               </div>
             )}
           </div>
 
           {/* Categories */}
-          {book.categories && book.categories.length > 0 && (
+          {currentBook.categories && currentBook.categories.length > 0 && (
             <div className="mb-3">
               <span className="text-xs font-medium text-gray-600">Categories: </span>
               <div className="flex flex-wrap gap-1 mt-1">
-                {book.categories.slice(0, 3).map((category, index) => (
+                {currentBook.categories.slice(0, 3).map((category, index) => (
                   <span
                     key={index}
                     className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded"
@@ -312,24 +326,68 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
                     {category}
                   </span>
                 ))}
-                {book.categories.length > 3 && (
+                {currentBook.categories.length > 3 && (
                   <span className="text-xs text-gray-500">
-                    +{book.categories.length - 3} more
+                    +{currentBook.categories.length - 3} more
                   </span>
                 )}
               </div>
             </div>
           )}
 
+          {/* API Source Enhancement Indicators */}
+          {currentBook.source === 'merged_apis' && (
+            <div className="mb-3">
+              <div className="flex items-center gap-1 text-xs text-purple-600">
+                <span className="inline-block w-2 h-2 bg-purple-500 rounded-full"></span>
+                <span>Merged data from Google Books & Open Library</span>
+              </div>
+              {currentBook.openLibraryData?.editionCount && currentBook.openLibraryData.editionCount > 1 && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {currentBook.openLibraryData.editionCount} editions available
+                </div>
+              )}
+            </div>
+          )}
+          
+          {currentBook.source === 'open_library_primary' && (
+            <div className="mb-3">
+              <div className="flex items-center gap-1 text-xs text-orange-600">
+                <span className="inline-block w-2 h-2 bg-orange-500 rounded-full"></span>
+                <span>Primary data from Open Library</span>
+              </div>
+              {currentBook.openLibraryData?.editionCount && currentBook.openLibraryData.editionCount > 1 && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {currentBook.openLibraryData.editionCount} editions available
+                </div>
+              )}
+            </div>
+          )}
+          
+          {currentBook.openLibraryData && currentBook.originalPublishedDate !== currentBook.publishedDate && 
+           !['merged_apis', 'open_library_primary'].includes(currentBook.source) && (
+            <div className="mb-3">
+              <div className="flex items-center gap-1 text-xs text-green-600">
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                <span>Enhanced with original publication date from Open Library</span>
+              </div>
+              {currentBook.openLibraryData.editionCount && currentBook.openLibraryData.editionCount > 1 && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {currentBook.openLibraryData.editionCount} editions available
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Rating */}
-          {book.averageRating && (
+          {currentBook.averageRating && (
             <div className="flex items-center gap-2 mb-3">
               <div className="flex items-center">
                 {[...Array(5)].map((_, i) => (
                   <svg
                     key={i}
                     className={`w-4 h-4 ${
-                      i < Math.floor(book.averageRating!) 
+                      i < Math.floor(currentBook.averageRating!) 
                         ? 'text-yellow-400' 
                         : 'text-gray-300'
                     }`}
@@ -341,17 +399,17 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
                 ))}
               </div>
               <span className="text-xs text-gray-600">
-                {book.averageRating.toFixed(1)}
-                {book.ratingsCount && ` (${book.ratingsCount} reviews)`}
+                {currentBook.averageRating.toFixed(1)}
+                {currentBook.ratingsCount && ` (${currentBook.ratingsCount} reviews)`}
               </span>
             </div>
           )}
 
           {/* Links */}
           <div className="flex gap-2 text-xs mb-3">
-            {book.previewLink && (
+            {currentBook.previewLink && (
               <a
-                href={book.previewLink}
+                href={currentBook.previewLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:text-blue-800 underline"
@@ -360,9 +418,9 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
                 Preview
               </a>
             )}
-            {book.infoLink && (
+            {currentBook.infoLink && (
               <a
-                href={book.infoLink}
+                href={currentBook.infoLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:text-blue-800 underline"
@@ -371,9 +429,9 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
                 More Info
               </a>
             )}
-            {book.buyLink && (
+            {currentBook.buyLink && (
               <a
-                href={book.buyLink}
+                href={currentBook.buyLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-green-600 hover:text-green-800 underline"
@@ -386,15 +444,59 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
 
           {/* Source indicator */}
           <div className="flex items-center justify-between">
-            <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
-              Source: {book.source}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+                {currentBook.source === 'merged_apis' ? 'Sources: Google Books + Open Library' :
+                 currentBook.source === 'open_library_primary' ? 'Source: Open Library' :
+                 currentBook.source === 'google_books_enhanced' ? 'Source: Google Books (Enhanced)' :
+                 currentBook.source === 'open_library_edition' ? 'Source: Open Library Edition' :
+                 `Source: ${currentBook.source}`}
+              </span>
+              {(currentBook as any).relevanceScore && (
+                <span className="inline-block bg-blue-100 text-blue-600 text-xs px-2 py-1 rounded">
+                  Score: {(currentBook as any).relevanceScore}
+                </span>
+              )}
+            </div>
+            
+            {/* View Editions Button */}
+            {currentBook.openLibraryData?.editionCount && currentBook.openLibraryData.editionCount > 1 && currentBook.openLibraryKey && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowEditionsModal(true);
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
+              >
+                View {currentBook.openLibraryData.editionCount} Editions
+              </button>
+            )}
           </div>
 
           {/* Notion Integration */}
           {renderNotionActions()}
         </div>
       </div>
+
+      {/* Book Editions Modal */}
+      {currentBook.openLibraryKey && (
+        <BookEditionsModal
+          isOpen={showEditionsModal}
+          onClose={() => setShowEditionsModal(false)}
+          workKey={currentBook.openLibraryKey}
+          bookTitle={currentBook.title}
+          onSelectEdition={handleSelectEdition}
+        />
+      )}
+
+      {/* Book Details Modal */}
+      <BookDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        book={currentBook}
+        isNotionConnected={isNotionConnected}
+        notionSettings={notionSettings}
+      />
     </div>
   );
 };

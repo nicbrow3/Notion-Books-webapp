@@ -32,10 +32,11 @@ const generateFieldMappings = (notionProperties) => {
     isbn10: { type: 'rich_text', priority: 2, keywords: ['isbn10', 'isbn-10'] },
     description: { type: 'rich_text', priority: 1, keywords: ['description', 'summary', 'synopsis', 'about'] },
     categories: { type: 'multi_select', priority: 1, keywords: ['category', 'categories', 'genre', 'genres', 'subject', 'subjects'] },
-    publishedDate: { type: 'date', priority: 1, keywords: ['published', 'date', 'publication', 'release'] },
+    publishedDate: { type: 'date', priority: 1, keywords: ['published', 'date', 'publication', 'release', 'edition'] },
+    originalPublishedDate: { type: 'date', priority: 1, keywords: ['original', 'first', 'initial', 'debut', 'premiere'] },
     publisher: { type: 'select', priority: 1, keywords: ['publisher', 'publishing', 'press'] },
     pageCount: { type: 'number', priority: 1, keywords: ['pages', 'page', 'count', 'length'] },
-    thumbnail: { type: 'url', priority: 2, keywords: ['cover', 'image', 'thumbnail', 'picture'] },
+    thumbnail: { type: 'files', priority: 2, keywords: ['cover', 'image', 'thumbnail', 'picture'] },
     language: { type: 'select', priority: 2, keywords: ['language', 'lang'] },
     averageRating: { type: 'number', priority: 2, keywords: ['rating', 'score', 'stars'] },
     ratingsCount: { type: 'number', priority: 3, keywords: ['ratings', 'reviews', 'count'] }
@@ -146,6 +147,7 @@ const isTypeCompatible = (googleType, notionType) => {
     'date': ['date', 'rich_text'],
     'number': ['number', 'rich_text'],
     'url': ['url', 'rich_text'],
+    'files': ['files', 'url', 'rich_text'],
     'checkbox': ['checkbox']
   };
 
@@ -456,14 +458,20 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
         const options = Array.isArray(value) ? value : [value];
         return {
           multi_select: options.slice(0, 10).map(option => ({ // Limit to 10 options
-            name: String(option).substring(0, 100) // Notion option name limit
+            name: String(option)
+              .replace(/,/g, ' -') // Replace commas with dashes
+              .substring(0, 100) // Notion option name limit
+              .trim()
           }))
         };
 
       case 'select':
         return {
           select: {
-            name: String(Array.isArray(value) ? value[0] : value).substring(0, 100)
+            name: String(Array.isArray(value) ? value[0] : value)
+              .replace(/,/g, ' -') // Replace commas with dashes
+              .substring(0, 100)
+              .trim()
           }
         };
 
@@ -542,7 +550,8 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
     isbn10: bookData.isbn10,
     description: bookData.description,
     categories: bookData.categories,
-    publishedDate: bookData.publishedDate,
+    publishedDate: bookData.editionPublishedDate || bookData.publishedDate,
+    originalPublishedDate: bookData.originalPublishedDate,
     publisher: bookData.publisher,
     pageCount: bookData.pageCount,
     thumbnail: bookData.thumbnail,
@@ -551,7 +560,27 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
     ratingsCount: bookData.ratingsCount
   };
 
-  // Process each field mapping
+  console.log('Book data received:', {
+    title: bookData.title,
+    publishedDate: bookData.publishedDate,
+    editionPublishedDate: bookData.editionPublishedDate,
+    originalPublishedDate: bookData.originalPublishedDate,
+    thumbnail: bookData.thumbnail
+  });
+
+  // Process each field mapping with priority handling
+  // First pass: collect all mappings and identify conflicts
+  const mappingPriority = {
+    originalPublishedDate: 1,
+    publishedDate: 2,
+    isbn13: 1,
+    isbn: 2,
+    isbn10: 3
+  };
+
+  const propertyMappings = new Map();
+  
+  // Collect all mappings
   for (const [bookField, notionPropertyName] of Object.entries(fieldMappings)) {
     if (!notionPropertyName || !bookFieldMap[bookField]) continue;
 
@@ -562,8 +591,28 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
       console.warn(`Property "${notionPropertyName}" does not exist in database. Skipping field "${bookField}".`);
       continue;
     }
-    
-    const formattedValue = formatPropertyValue(bookFieldMap[bookField], propertyType, notionPropertyName);
+
+    // Check if this property is already mapped
+    const existing = propertyMappings.get(notionPropertyName);
+    const currentPriority = mappingPriority[bookField] || 999;
+    const existingPriority = existing ? (mappingPriority[existing.bookField] || 999) : 999;
+
+    // Use higher priority mapping (lower number = higher priority)
+    if (!existing || currentPriority < existingPriority) {
+      if (existing) {
+        console.log(`🔄 Overriding mapping for "${notionPropertyName}": ${existing.bookField} (priority ${existingPriority}) → ${bookField} (priority ${currentPriority})`);
+      }
+      propertyMappings.set(notionPropertyName, {
+        bookField,
+        value: bookFieldMap[bookField],
+        propertyType
+      });
+    }
+  }
+
+  // Second pass: apply the final mappings
+  for (const [notionPropertyName, mapping] of propertyMappings) {
+    const formattedValue = formatPropertyValue(mapping.value, mapping.propertyType, notionPropertyName);
 
     if (formattedValue) {
       properties[notionPropertyName] = formattedValue;
@@ -594,6 +643,16 @@ router.post('/pages/book', requireAuth, async (req, res) => {
       },
       properties
     };
+
+    // Add page icon if enabled and thumbnail is available
+    if (fieldMappings?.pageIcon && bookData.thumbnail) {
+      pageData.icon = {
+        type: 'external',
+        external: {
+          url: bookData.thumbnail
+        }
+      };
+    }
 
     console.log('Field mappings received:', JSON.stringify(fieldMappings, null, 2));
     console.log('Creating Notion page with data:', JSON.stringify(pageData, null, 2));

@@ -78,7 +78,17 @@ const BookCard: React.FC<BookCardProps> = ({ book, onSelect }) => {
 
           {/* Metadata Grid */}
           <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
-            {book.publishedDate && (
+            {book.originalPublishedDate && (
+              <div>
+                <span className="font-medium">First Published:</span> {formatDate(book.originalPublishedDate)}
+              </div>
+            )}
+            {book.publishedDate && book.originalPublishedDate !== book.publishedDate && (
+              <div>
+                <span className="font-medium">This Edition:</span> {formatDate(book.publishedDate)}
+              </div>
+            )}
+            {book.publishedDate && !book.originalPublishedDate && (
               <div>
                 <span className="font-medium">Published:</span> {formatDate(book.publishedDate)}
               </div>

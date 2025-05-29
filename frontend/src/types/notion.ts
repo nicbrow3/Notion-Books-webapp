@@ -99,12 +99,14 @@ export interface BookToNotionMapping {
   authors: string; // Notion property name for authors
   description?: string; // Notion property name for description
   isbn?: string; // Notion property name for ISBN
-  publishedDate?: string; // Notion property name for published date
+  publishedDate?: string; // Notion property name for published date (edition)
+  originalPublishedDate?: string; // Notion property name for original published date (first edition)
   publisher?: string; // Notion property name for publisher
   pageCount?: string; // Notion property name for page count
   categories?: string; // Notion property name for categories
   rating?: string; // Notion property name for rating
   thumbnail?: string; // Notion property name for cover image
+  pageIcon?: boolean; // Whether to set the cover image as the page icon
   status?: string; // Notion property name for reading status
   notes?: string; // Notion property name for personal notes
 }
@@ -132,4 +134,12 @@ export interface CreateNotionPageRequest {
   bookData: any; // Book data from Google Books API
   fieldMapping: BookToNotionMapping;
   customValues?: Record<string, any>;
+}
+
+export interface NotionBookSearchResult {
+  id: string;
+  url: string;
+  title: string;
+  isbn: string;
+  created_time: string;
 } 

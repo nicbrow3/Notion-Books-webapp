@@ -2,7 +2,8 @@ import {
   NotionDatabase, 
   NotionPage, 
   CreateNotionPageRequest,
-  NotionIntegrationSettings 
+  NotionIntegrationSettings,
+  NotionBookSearchResult
 } from '../types/notion';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
@@ -11,7 +12,7 @@ export class NotionService {
   /**
    * Setup Notion integration using personal token
    */
-  static async setupIntegration(): Promise<{ success: boolean; message: string; user?: any }> {
+  static async setupIntegration(): Promise<{ success: boolean; message: string; user?: any; isFirstTime?: boolean }> {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/setup`, {
         method: 'POST',
@@ -30,7 +31,8 @@ export class NotionService {
       return {
         success: true,
         message: result.message || 'Successfully connected to Notion',
-        user: result.user
+        user: result.user,
+        isFirstTime: result.isFirstTime
       };
     } catch (error) {
       console.error('Setup integration error:', error);
@@ -44,7 +46,7 @@ export class NotionService {
   /**
    * Check if user is authenticated with Notion
    */
-  static async checkAuth(): Promise<{ authenticated: boolean; user?: any }> {
+  static async checkAuth(): Promise<{ authenticated: boolean; user?: any; autoAuthenticated?: boolean }> {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/status`, {
         method: 'GET',
@@ -58,7 +60,8 @@ export class NotionService {
       const result = await response.json();
       return {
         authenticated: result.authenticated || false,
-        user: result.user
+        user: result.user,
+        autoAuthenticated: result.autoAuthenticated
       };
     } catch (error) {
       console.error('Auth check error:', error);
@@ -268,7 +271,7 @@ export class NotionService {
   /**
    * Search for existing books in Notion database to avoid duplicates
    */
-  static async searchExistingBooks(databaseId: string, isbn?: string, title?: string, fieldMappings?: any): Promise<NotionPage[]> {
+  static async searchExistingBooks(databaseId: string, isbn?: string, title?: string, fieldMappings?: any): Promise<NotionBookSearchResult[]> {
     try {
       const searchParams = new URLSearchParams();
       if (isbn) searchParams.append('isbn', isbn);

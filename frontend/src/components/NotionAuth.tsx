@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { NotionService } from '../services/notionService';
 
 interface NotionAuthProps {
@@ -7,6 +8,7 @@ interface NotionAuthProps {
 }
 
 const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
+  const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,6 +27,14 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
       setIsAuthenticated(authStatus.authenticated);
       setUser(authStatus.user);
       
+      // Show a toast if user was auto-authenticated
+      if (authStatus.authenticated && authStatus.autoAuthenticated) {
+        toast.success('Automatically connected to Notion!', { 
+          id: 'auto-auth',
+          duration: 3000 
+        });
+      }
+      
       if (onAuthChangeRef.current) {
         onAuthChangeRef.current(authStatus.authenticated, authStatus.user);
       }
@@ -38,6 +48,7 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
 
   useEffect(() => {
     checkAuthStatus();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
   const handleConnect = async () => {
@@ -48,7 +59,15 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
       const result = await NotionService.setupIntegration();
       
       if (result.success) {
-        toast.success(result.message, { id: 'notion-auth' });
+        if (result.isFirstTime) {
+          toast.success('Welcome! Let\'s configure your Notion integration.', { id: 'notion-auth' });
+          // Redirect to settings for first-time users
+          setTimeout(() => {
+            navigate('/settings');
+          }, 1000);
+        } else {
+          toast.success(result.message, { id: 'notion-auth' });
+        }
         // Refresh auth status
         await checkAuthStatus();
       } else {
@@ -102,6 +121,9 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
           </svg>
           <span className="text-gray-600">Checking Notion connection...</span>
         </div>
+        <p className="text-xs text-gray-500 text-center mt-2">
+          Looking for configured integration token...
+        </p>
       </div>
     );
   }
@@ -132,10 +154,16 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
 
           <div className="flex items-center space-x-2">
             <button
-              onClick={testConnection}
+              onClick={() => navigate('/settings')}
               className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
             >
-              Test Connection
+              Settings
+            </button>
+            <button
+              onClick={testConnection}
+              className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+            >
+              Test
             </button>
             <button
               onClick={handleDisconnect}
@@ -147,13 +175,21 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
         </div>
 
         <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-          <div className="flex items-center">
-            <svg className="h-5 w-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <span className="text-green-800 text-sm">
-              Ready to add books to your Notion database!
-            </span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span className="text-green-800 text-sm">
+                Ready to add books to your Notion database!
+              </span>
+            </div>
+            <button
+              onClick={() => navigate('/settings')}
+              className="text-green-700 hover:text-green-800 text-sm font-medium underline"
+            >
+              Configure Settings
+            </button>
           </div>
         </div>
       </div>
@@ -202,7 +238,8 @@ const NotionAuth: React.FC<NotionAuthProps> = ({ onAuthChange }) => {
         </button>
 
         <p className="text-xs text-gray-500 mt-4">
-          Make sure you have configured your Notion integration token in the backend.
+          If you have configured your Notion integration token in the backend, 
+          the connection will happen automatically when you load the app.
         </p>
       </div>
     </div>

@@ -122,7 +122,7 @@ const Search: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {books.map((book) => (
+            {books.map((book: BookSearchResult) => (
               <BookCard
                 key={book.id}
                 book={book}

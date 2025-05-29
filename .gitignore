@@ -71,4 +71,7 @@ Thumbs.db
 
 # Temporary files
 tmp/
-temp/ 
+temp/
+
+# File storage data (user settings)
+backend/src/data/ 
