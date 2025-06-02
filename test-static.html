@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Static File Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Static File Serving Test</h1>
+        <p class="success">✅ If you can see this page, static file serving is working!</p>
+        
+        <div class="test-item">
+            <strong>Test 1:</strong> This HTML file is being served correctly
+        </div>
+        
+        <div class="test-item">
+            <strong>Test 2:</strong> Check the browser console for any JavaScript errors
+        </div>
+        
+        <div class="test-item">
+            <strong>Test 3:</strong> Try accessing <code>/debug/files</code> to see what files are available
+        </div>
+        
+        <div class="test-item">
+            <strong>Next Steps:</strong> If this works but the main app doesn't, there might be an issue with the React build files
+        </div>
+        
+        <script>
+            console.log('✅ JavaScript is working!');
+            console.log('Current URL:', window.location.href);
+            console.log('User Agent:', navigator.userAgent);
+            
+            // Test API connectivity
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('✅ API Health Check:', data);
+                    document.body.innerHTML += '<div class="test-item success">✅ API connectivity confirmed</div>';
+                })
+                .catch(error => {
+                    console.error('❌ API Health Check failed:', error);
+                    document.body.innerHTML += '<div class="test-item" style="border-left-color: #dc3545;">❌ API connectivity failed</div>';
+                });
+        </script>
+    </div>
+</body>
+</html> 

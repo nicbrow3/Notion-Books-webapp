@@ -6,14 +6,14 @@ WORKDIR /app/frontend
 # Copy frontend package files
 COPY frontend/package*.json ./
 
-# Install frontend dependencies
-RUN npm ci --only=production
+# Install ALL dependencies (including devDependencies needed for build)
+RUN npm ci
 
 # Copy frontend source code
 COPY frontend/ ./
 
-# Build the React app
-RUN npm run build
+# Build the React app with verbose output
+RUN npm run build && ls -la build/ && echo "Frontend build completed successfully"
 
 # Build stage for backend
 FROM node:18-alpine as backend-builder
@@ -42,6 +42,12 @@ COPY --from=backend-builder /app/backend ./backend
 
 # Copy built frontend from builder
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
+
+# Copy test file to frontend build directory
+COPY test-static.html ./frontend/build/test.html
+
+# Verify frontend files were copied correctly
+RUN ls -la frontend/build/ && echo "Frontend files copied to production stage"
 
 # Copy root config files
 COPY config.json ./

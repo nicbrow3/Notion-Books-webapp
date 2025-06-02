@@ -76,6 +76,43 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Debug endpoint to check static files (only in production for troubleshooting)
+app.get('/debug/files', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    const fs = require('fs');
+    const staticPath = path.join(__dirname, '../../frontend/build');
+    try {
+      const files = fs.readdirSync(staticPath, { withFileTypes: true });
+      const fileList = files.map(file => ({
+        name: file.name,
+        isDirectory: file.isDirectory()
+      }));
+      res.json({
+        staticPath,
+        files: fileList,
+        indexExists: fs.existsSync(path.join(staticPath, 'index.html'))
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Could not read static files directory',
+        staticPath,
+        message: error.message
+      });
+    }
+  } else {
+    res.status(404).json({ error: 'Debug endpoint only available in production' });
+  }
+});
+
+// Test route for debugging static file serving
+app.get('/test', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    res.sendFile(path.join(__dirname, '../../frontend/build/test.html'));
+  } else {
+    res.status(404).json({ error: 'Test page only available in production' });
+  }
+});
+
 // Serve React app for all other routes in production
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
