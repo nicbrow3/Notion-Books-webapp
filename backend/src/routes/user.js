@@ -365,90 +365,19 @@ router.get('/export', requireAuth, async (req, res) => {
   }
 });
 
-// Get user's Notion integration settings (alias for /settings)
-router.get('/notion-settings', requireAuth, async (req, res) => {
+// Get user's Notion integration settings (alias for /settings) - now returns empty since we use localStorage
+router.get('/notion-settings', async (req, res) => {
   try {
-    // Check if database is available
-    if (pool) {
-      try {
-        const query = `
-          SELECT 
-            us.notion_database_id as databaseId,
-            us.field_mappings as fieldMapping,
-            us.default_properties as defaultValues,
-            us.default_published_date_type as defaultPublishedDateType,
-            us.created_at,
-            us.updated_at,
-            u.notion_workspace_name,
-            u.email
-          FROM user_settings us
-          LEFT JOIN users u ON us.user_id = u.id
-          WHERE us.user_id = $1;
-        `;
-
-        const result = await pool.query(query, [req.session.userId]);
-
-        if (result.rows.length === 0) {
-          return res.status(404).json({ 
-            success: false,
-            message: 'No Notion settings found' 
-          });
-        }
-
-        const settings = result.rows[0];
-        
-        // Parse JSON fields
-        if (typeof settings.fieldmapping === 'string') {
-          settings.fieldMapping = JSON.parse(settings.fieldmapping);
-        }
-        if (typeof settings.defaultvalues === 'string') {
-          settings.defaultValues = JSON.parse(settings.defaultvalues);
-        }
-
-        return res.json({
-          success: true,
-          data: {
-            settings
-          }
-        });
-      } catch (dbError) {
-        console.log('Database check failed, trying file storage:', dbError.message);
-        // Fall through to file storage
-      }
-    }
-
-    // Try file storage as fallback
-    try {
-      const userKey = `user_settings_${req.session.userId || req.session.notionUserId || 'default'}`;
-      const fileSettings = await fileStorage.get(userKey);
-      
-      if (fileSettings) {
-        console.log('📁 Using file storage for settings');
-        return res.json({
-          success: true,
-          data: {
-            settings: fileSettings
-          }
-        });
-      }
-    } catch (fileError) {
-      console.log('File storage check failed, using session data:', fileError.message);
-    }
-
-    // Use session-based storage when database is not available
-    const sessionSettings = req.session.notionSettings || {
-      databaseId: null,
-      fieldMapping: {},
-      defaultValues: {},
-      defaultPublishedDateType: 'original',
-      workspaceName: req.session.notionWorkspaceName || null,
-      email: req.session.notionEmail || null
-    };
-
+    // Return empty settings since we now use localStorage on frontend
     res.json({
       success: true,
       data: {
-        settings: sessionSettings
+        settings: {
+          databaseId: null,
+          fieldMapping: {},
+          defaultValues: {},
+          defaultPublishedDateType: 'original'
+        }
       }
     });
 
@@ -461,113 +390,14 @@ router.get('/notion-settings', requireAuth, async (req, res) => {
   }
 });
 
-// Update user's Notion integration settings (alias for /settings)
-router.put('/notion-settings', requireAuth, async (req, res) => {
+// Update user's Notion integration settings (alias for /settings) - now just returns success since we use localStorage
+router.put('/notion-settings', async (req, res) => {
   try {
-    const {
-      databaseId,
-      fieldMapping,
-      defaultValues,
-      defaultPublishedDateType
-    } = req.body;
-
-    // Check if database is available
-    if (pool) {
-      try {
-        const query = `
-          INSERT INTO user_settings (user_id, notion_database_id, field_mappings, default_properties, default_published_date_type)
-          VALUES ($1, $2, $3, $4, $5)
-          ON CONFLICT (user_id) 
-          DO UPDATE SET 
-            notion_database_id = EXCLUDED.notion_database_id,
-            field_mappings = EXCLUDED.field_mappings,
-            default_properties = EXCLUDED.default_properties,
-            default_published_date_type = EXCLUDED.default_published_date_type,
-            updated_at = CURRENT_TIMESTAMP
-          RETURNING 
-            notion_database_id as databaseId,
-            field_mappings as fieldMapping,
-            default_properties as defaultValues,
-            default_published_date_type as defaultPublishedDateType,
-            updated_at;
-        `;
-
-        const result = await pool.query(query, [
-          req.session.userId,
-          databaseId || null,
-          JSON.stringify(fieldMapping || {}),
-          JSON.stringify(defaultValues || {}),
-          defaultPublishedDateType || 'original'
-        ]);
-
-        const settings = result.rows[0];
-        
-        // Parse JSON fields
-        if (typeof settings.fieldmapping === 'string') {
-          settings.fieldMapping = JSON.parse(settings.fieldmapping);
-        }
-        if (typeof settings.defaultvalues === 'string') {
-          settings.defaultValues = JSON.parse(settings.defaultvalues);
-        }
-
-        return res.json({
-          success: true,
-          data: {
-            settings
-          }
-        });
-      } catch (dbError) {
-        console.log('Database storage failed, trying file storage:', dbError.message);
-        // Fall through to file storage
-      }
-    }
-
-    // Try file storage as fallback
-    try {
-      const userKey = `user_settings_${req.session.userId || req.session.notionUserId || 'default'}`;
-      const settingsToStore = {
-        databaseId: databaseId || null,
-        fieldMapping: fieldMapping || {},
-        defaultValues: defaultValues || {},
-        defaultPublishedDateType: defaultPublishedDateType || 'original',
-        workspaceName: req.session.notionWorkspaceName || null,
-        email: req.session.notionEmail || null,
-        updatedAt: new Date().toISOString()
-      };
-
-      const stored = await fileStorage.set(userKey, settingsToStore);
-      
-      if (stored) {
-        console.log('📁 Settings saved to file storage');
-        // Also update session for immediate use
-        req.session.notionSettings = settingsToStore;
-        
-        return res.json({
-          success: true,
-          data: {
-            settings: settingsToStore
-          }
-        });
-      }
-    } catch (fileError) {
-      console.log('File storage failed, using session-only storage:', fileError.message);
-    }
-
-    // Use session-based storage as final fallback
-    req.session.notionSettings = {
-      databaseId: databaseId || null,
-      fieldMapping: fieldMapping || {},
-      defaultValues: defaultValues || {},
-      defaultPublishedDateType: defaultPublishedDateType || 'original',
-      workspaceName: req.session.notionWorkspaceName || null,
-      email: req.session.notionEmail || null,
-      updatedAt: new Date().toISOString()
-    };
-
+    // Just return success since settings are now stored in localStorage
     res.json({
       success: true,
       data: {
-        settings: req.session.notionSettings
+        settings: req.body
       }
     });
 

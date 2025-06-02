@@ -42,6 +42,7 @@ const generateFieldMappings = (notionProperties) => {
     ratingsCount: { type: 'number', priority: 3, keywords: ['ratings', 'reviews', 'count'] },
     // Audiobook-specific fields
     audiobookPublisher: { type: 'select', priority: 2, keywords: ['audiobook', 'audio', 'publisher', 'audible', 'narrator', 'voice'] },
+    audiobookPublishedDate: { type: 'date', priority: 2, keywords: ['audiobook', 'audio', 'published', 'release', 'date'] },
     audiobookChapters: { type: 'number', priority: 2, keywords: ['chapters', 'chapter', 'parts', 'sections', 'audiobook'] },
     audiobookASIN: { type: 'rich_text', priority: 2, keywords: ['asin', 'amazon', 'audible', 'id', 'identifier'] },
     audiobookNarrators: { type: 'multi_select', priority: 2, keywords: ['narrator', 'narrators', 'voice', 'reader', 'audiobook'] },
@@ -655,6 +656,7 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
     ratingsCount: bookData.ratingsCount,
     // Audiobook-specific fields
     audiobookPublisher: bookData.audiobookData?.publisher,
+    audiobookPublishedDate: bookData.audiobookData?.publishedDate,
     audiobookChapters: bookData.audiobookData?.chapters || bookData.audiobookData?.chapterCount,
     audiobookASIN: bookData.audiobookData?.asin,
     audiobookNarrators: bookData.audiobookData?.narrators,
@@ -692,17 +694,20 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
     fullBookData: {
       publishedDate: bookData.publishedDate,
       originalPublishedDate: bookData.originalPublishedDate,
-      editionPublishedDate: bookData.editionPublishedDate
+      editionPublishedDate: bookData.editionPublishedDate,
+      audiobookPublishedDate: bookData.audiobookData?.publishedDate
     },
     dataTypes: {
       publishedDate: typeof bookData.publishedDate,
       originalPublishedDate: typeof bookData.originalPublishedDate,
-      editionPublishedDate: typeof bookData.editionPublishedDate
+      editionPublishedDate: typeof bookData.editionPublishedDate,
+      audiobookPublishedDate: typeof bookData.audiobookData?.publishedDate
     },
     stringLengths: {
       publishedDate: bookData.publishedDate ? String(bookData.publishedDate).length : 'null',
       originalPublishedDate: bookData.originalPublishedDate ? String(bookData.originalPublishedDate).length : 'null',
-      editionPublishedDate: bookData.editionPublishedDate ? String(bookData.editionPublishedDate).length : 'null'
+      editionPublishedDate: bookData.editionPublishedDate ? String(bookData.editionPublishedDate).length : 'null',
+      audiobookPublishedDate: bookData.audiobookData?.publishedDate ? String(bookData.audiobookData.publishedDate).length : 'null'
     },
     note: 'Frontend claims it has "Dec 31, 2022" but we may be receiving just "2023"'
   });
@@ -736,7 +741,16 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
   
   // Collect all mappings
   for (const [bookField, notionPropertyName] of Object.entries(fieldMappings)) {
-    if (!notionPropertyName || !bookFieldMap[bookField]) continue;
+    // Improved filtering for "Don't map" values
+    if (!notionPropertyName || 
+        notionPropertyName === '' || 
+        notionPropertyName === 'Don\'t map' ||
+        notionPropertyName === 'undefined' ||
+        notionPropertyName === 'null' ||
+        !bookFieldMap[bookField]) {
+      console.log(`⏭️ Skipping field "${bookField}" - mapping value: "${notionPropertyName}", has book data: ${!!bookFieldMap[bookField]}`);
+      continue;
+    }
 
     const propertyType = getPropertyType(notionPropertyName);
     
@@ -814,6 +828,17 @@ router.post('/pages/book', requireAuth, async (req, res) => {
     }
 
     console.log('Field mappings received:', JSON.stringify(fieldMappings, null, 2));
+    console.log('🔍 DETAILED FIELD MAPPING DEBUG:', {
+      receivedFieldMappings: fieldMappings,
+      publishedDateMapping: fieldMappings?.publishedDate,
+      originalPublishedDateMapping: fieldMappings?.originalPublishedDate,
+      audiobookPublishedDateMapping: fieldMappings?.audiobookPublishedDate,
+      allMappingKeys: Object.keys(fieldMappings || {}),
+      allMappingValues: Object.values(fieldMappings || {}),
+      problematicMappings: Object.entries(fieldMappings || {}).filter(([key, value]) => 
+        value === 'Published' || (typeof value === 'string' && value.includes('Published'))
+      )
+    });
     console.log('Creating Notion page with data:', JSON.stringify(pageData, null, 2));
 
     const response = await notionRequest(token, 'POST', '/pages', pageData);

@@ -231,49 +231,32 @@ export class NotionService {
   }
 
   /**
-   * Get user's Notion integration settings
+   * Get user's Notion integration settings from localStorage
    */
   static async getSettings(): Promise<NotionIntegrationSettings | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/user/notion-settings`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null; // No settings found
-        }
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      const settingsJson = localStorage.getItem('notion-settings');
+      if (!settingsJson) {
+        return null; // No settings found
       }
-
-      const result = await response.json();
-      return result.success ? result.data.settings : null;
+      
+      const settings = JSON.parse(settingsJson);
+      console.log('📱 Loaded settings from localStorage:', settings);
+      return settings;
     } catch (error) {
       console.error('Get settings error:', error);
-      throw error;
+      return null;
     }
   }
 
   /**
-   * Save user's Notion integration settings
+   * Save user's Notion integration settings to localStorage
    */
   static async saveSettings(settings: NotionIntegrationSettings): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/user/notion-settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(settings),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
+      const settingsJson = JSON.stringify(settings);
+      localStorage.setItem('notion-settings', settingsJson);
+      console.log('📱 Saved settings to localStorage:', settings);
     } catch (error) {
       console.error('Save settings error:', error);
       throw error;
