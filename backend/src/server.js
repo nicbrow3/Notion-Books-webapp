@@ -6,6 +6,7 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
+const path = require('path');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -93,6 +94,11 @@ if (pool && dbConnected) {
 
 app.use(session(sessionConfig));
 
+// Serve static files from React build in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../../frontend/build')));
+}
+
 // Routes
 app.use('/auth', authRoutes);
 app.use('/api/books', bookRoutes);
@@ -109,9 +115,16 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+// Serve React app for all other routes in production
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../frontend/build/index.html'));
+  });
+}
+
+// 404 handler (only for non-production or API routes)
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: 'API route not found' });
 });
 
 // Global error handler

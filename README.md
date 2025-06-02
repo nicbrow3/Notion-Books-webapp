@@ -97,6 +97,81 @@ A web application that fetches book information from Google Books API and Open L
    - Backend server on http://localhost:5000
    - Frontend server on http://localhost:3000
 
+## Docker Deployment
+
+This project is automatically built and deployed as a Docker container using GitHub Actions.
+
+### Container Registry
+
+The Docker image is automatically built and pushed to GitHub Container Registry when code is pushed to the main branch.
+
+**Docker Image**: `ghcr.io/nicbrow3/notion-books-webapp:latest`
+
+### Running Locally with Docker
+
+```bash
+# Build the image
+docker build -t notion-books-app .
+
+# Run the container
+docker run -p 8080:3001 notion-books-app
+```
+
+Visit `http://localhost:8080` to view the app.
+
+### Docker Compose (Local Development)
+
+For local development with a PostgreSQL database:
+
+```bash
+# Start the application with database
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the application
+docker-compose down
+```
+
+This will start:
+- The application on `http://localhost:8080`
+- PostgreSQL database on `localhost:5432`
+
+**Note**: Make sure to create a `.env` file in the `backend/` directory with your API keys and configuration before running docker-compose.
+
+### Unraid Deployment
+
+1. In Unraid, go to Docker tab and click "Add Container"
+2. Set these values:
+   - **Name**: `notion-books-app` (or your preferred name)
+   - **Repository**: `ghcr.io/nicbrow3/notion-books-webapp:latest` 
+   - **Network Type**: `bridge`
+   - **Port**: `8080:3001` (or your preferred external port)
+   - **WebUI**: `http://[IP]:[PORT:8080]`
+
+3. Click "Apply" to create and start the container
+
+### Updating
+
+When you push changes to the main branch:
+1. GitHub Actions automatically builds a new Docker image
+2. In Unraid, click the container and select "Update Container" to pull the latest version
+3. The container will restart with your latest changes
+
+### Making the Container Registry Public
+
+By default, the GitHub Container Registry package is private. To make it publicly accessible:
+
+1. Go to your GitHub repository
+2. Click on "Packages" (right sidebar)
+3. Click on your package name
+4. Go to "Package settings"
+5. Scroll down to "Danger Zone" and click "Change visibility"
+6. Select "Public"
+
+This allows Unraid to pull the image without authentication.
+
 ## API Configuration
 
 ### Notion Integration
