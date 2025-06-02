@@ -45,15 +45,20 @@ const corsOptions = {
         return callback(null, true);
       }
     } else {
-      // In production, allow the configured frontend URL and same-origin requests
+      // In production, be more permissive for Docker deployments
       const allowedOrigins = [
         process.env.FRONTEND_URL,
         `http://localhost:${process.env.PORT || 3001}`,
-        // Allow any origin that matches the server's port (for IP-based access)
-        origin.includes(`:${process.env.PORT || 3001}`)
+        `https://localhost:${process.env.PORT || 3001}`,
+        // Allow any origin on the same port (for Docker IP-based access)
+        ...(origin.includes(`:${process.env.PORT || 3001}`) ? [origin] : []),
+        // Allow common Docker bridge network IPs
+        ...(origin.match(/^https?:\/\/(192\.168\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|10\.)/i) ? [origin] : []),
+        // Allow any localhost variants
+        ...(origin.includes('localhost') || origin.includes('127.0.0.1') ? [origin] : [])
       ];
       
-      if (allowedOrigins.some(allowed => allowed === origin || (typeof allowed === 'boolean' && allowed))) {
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
     }

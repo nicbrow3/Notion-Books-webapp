@@ -142,15 +142,65 @@ This will start:
 
 ### Unraid Deployment
 
-1. In Unraid, go to Docker tab and click "Add Container"
-2. Set these values:
-   - **Name**: `notion-books-app` (or your preferred name)
-   - **Repository**: `ghcr.io/nicbrow3/notion-books-webapp:latest` 
-   - **Network Type**: `bridge`
-   - **Port**: `8080:3001` (or your preferred external port)
-   - **WebUI**: `http://[IP]:[PORT:8080]`
+#### Method 1: Using Docker Hub/GitHub Container Registry
 
-3. Click "Apply" to create and start the container
+1. **Add Container in Unraid:**
+   - Go to Docker tab in Unraid
+   - Click "Add Container"
+   - Use repository: `ghcr.io/yourusername/notion-books-webapp:latest`
+
+2. **Port Configuration:**
+   - Container Port: `3001`
+   - Host Port: `3001` (or any available port you prefer)
+   - Connection Type: `bridge`
+
+3. **Environment Variables (Required for Full Functionality):**
+   
+   **Basic Variables (Container will start without these but features will be limited):**
+   - `SESSION_SECRET`: Set a secure random string (32+ characters recommended)
+   - `NODE_ENV`: `production` (auto-configured)
+   - `PORT`: `3001` (auto-configured)
+   - `FRONTEND_URL`: `http://YOUR_UNRAID_IP:3001` (replace with your actual IP)
+   
+   **API Keys (Add these via Unraid UI after container is running):**
+   - `NOTION_INTEGRATION_TOKEN`: Your Notion integration token (required for Notion features)
+   - `GOOGLE_BOOKS_API_KEY`: Google Books API key (optional, enhances book search)
+   
+   **How to add API keys in Unraid:**
+   1. After container is created, click the container name to edit
+   2. Scroll to "Environment Variables" section
+   3. Click "Add another Path, Port, Variable, Label or Device"
+   4. Add variable name and value, then click "Apply"
+
+4. **Access:**
+   - Visit `http://YOUR_UNRAID_IP:3001`
+
+#### Troubleshooting CORS Issues
+
+If you see CORS (Cross-Origin Resource Sharing) errors in the browser console:
+
+**Problem:** `Access to fetch at 'http://localhost:3001/...' from origin 'http://192.168.x.x:3001' has been blocked by CORS policy`
+
+**Solution:** The frontend is trying to access `localhost` but running from a different IP. This is automatically handled by:
+
+1. **Dynamic API Detection**: The frontend automatically detects if it's running on the same port and uses the current origin
+2. **CORS Configuration**: The backend allows requests from Docker bridge network IPs (192.168.x.x, 172.x.x.x, 10.x.x.x)
+3. **Environment Variables**: Set `FRONTEND_URL` to match your server's actual IP address
+
+**Manual Fix (if needed):**
+```bash
+# In Unraid Docker settings, set:
+FRONTEND_URL=http://YOUR_ACTUAL_SERVER_IP:3001
+```
+
+#### Method 2: Using Docker Compose in Unraid
+
+If you want the full setup with database:
+
+1. **Install Compose Manager plugin** (if not already installed)
+2. **Create compose file** in `/mnt/user/appdata/notion-books/docker-compose.yml`
+3. **Use the provided docker-compose.yml** from this repository
+4. **Start via Compose Manager**
 
 ### Updating
 
@@ -382,13 +432,44 @@ docker run -d \
    - Host Port: `3001` (or any available port you prefer)
    - Connection Type: `bridge`
 
-3. **Environment Variables (Optional but Recommended):**
-   - `SESSION_SECRET`: Set a secure random string
-   - `NODE_ENV`: `production`
-   - `PORT`: `3001`
+3. **Environment Variables (Required for Full Functionality):**
+   
+   **Basic Variables (Container will start without these but features will be limited):**
+   - `SESSION_SECRET`: Set a secure random string (32+ characters recommended)
+   - `NODE_ENV`: `production` (auto-configured)
+   - `PORT`: `3001` (auto-configured)
+   - `FRONTEND_URL`: `http://YOUR_UNRAID_IP:3001` (replace with your actual IP)
+   
+   **API Keys (Add these via Unraid UI after container is running):**
+   - `NOTION_INTEGRATION_TOKEN`: Your Notion integration token (required for Notion features)
+   - `GOOGLE_BOOKS_API_KEY`: Google Books API key (optional, enhances book search)
+   
+   **How to add API keys in Unraid:**
+   1. After container is created, click the container name to edit
+   2. Scroll to "Environment Variables" section
+   3. Click "Add another Path, Port, Variable, Label or Device"
+   4. Add variable name and value, then click "Apply"
 
 4. **Access:**
    - Visit `http://YOUR_UNRAID_IP:3001`
+
+#### Troubleshooting CORS Issues
+
+If you see CORS (Cross-Origin Resource Sharing) errors in the browser console:
+
+**Problem:** `Access to fetch at 'http://localhost:3001/...' from origin 'http://192.168.x.x:3001' has been blocked by CORS policy`
+
+**Solution:** The frontend is trying to access `localhost` but running from a different IP. This is automatically handled by:
+
+1. **Dynamic API Detection**: The frontend automatically detects if it's running on the same port and uses the current origin
+2. **CORS Configuration**: The backend allows requests from Docker bridge network IPs (192.168.x.x, 172.x.x.x, 10.x.x.x)
+3. **Environment Variables**: Set `FRONTEND_URL` to match your server's actual IP address
+
+**Manual Fix (if needed):**
+```bash
+# In Unraid Docker settings, set:
+FRONTEND_URL=http://YOUR_ACTUAL_SERVER_IP:3001
+```
 
 #### Method 2: Using Docker Compose in Unraid
 
