@@ -1,0 +1,6 @@
+{
+  "notionIntegrationToken": "your_notion_integration_token_here",
+  "sessionSecret": "your_super_secret_session_key",
+  "googleBooksApiKey": "your_google_books_api_key_here",
+  "port": 3001
+} 
