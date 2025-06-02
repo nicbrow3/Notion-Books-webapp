@@ -2,18 +2,6 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
-// Database connection (optional for personal use)
-const { Pool } = require('pg');
-let pool = null;
-
-// Only initialize database if DATABASE_URL is provided
-if (process.env.DATABASE_URL) {
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-  });
-}
-
 // Middleware to check authentication
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
@@ -165,22 +153,9 @@ const isTypeCompatible = (googleType, notionType) => {
 
 // Get user's Notion access token
 const getNotionToken = async (req) => {
-  // For personal use, try session first, then database
+  // For personal use, try session first, then environment variable
   if (req.session.notionToken) {
     return req.session.notionToken;
-  }
-  
-  if (pool && req.session.userId) {
-    try {
-      const query = 'SELECT notion_access_token FROM users WHERE id = $1';
-      const result = await pool.query(query, [req.session.userId]);
-      
-      if (result.rows.length > 0) {
-        return result.rows[0].notion_access_token;
-      }
-    } catch (error) {
-      console.warn('Database token lookup failed:', error.message);
-    }
   }
   
   // Fallback to environment variable for personal use

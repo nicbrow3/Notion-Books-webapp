@@ -7,13 +7,6 @@ const bookSearchService = require('../services/bookSearchService');
 const bookSuggestionService = require('../services/bookSuggestionService');
 const AudiobookService = require('../services/audiobookService');
 
-// Database connection
-const { Pool } = require('pg');
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
 // Middleware to check authentication
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
