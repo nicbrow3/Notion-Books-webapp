@@ -49,9 +49,6 @@ COPY test-static.html ./frontend/build/test.html
 # Verify frontend files were copied correctly
 RUN ls -la frontend/build/ && echo "Frontend files copied to production stage"
 
-# Copy root config files
-COPY config.json ./
-
 # Set environment variables for browser-based storage
 ENV NODE_ENV=production
 ENV PORT=3001
