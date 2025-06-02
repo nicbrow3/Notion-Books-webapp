@@ -5,23 +5,7 @@ import {
   NotionIntegrationSettings,
   NotionBookSearchResult
 } from '../types/notion';
-
-// Dynamic API URL that works in both development and Docker environments
-const getApiBaseUrl = () => {
-  // In browser, use current origin if it's the same server (Docker deployment)
-  if (typeof window !== 'undefined') {
-    const currentOrigin = window.location.origin;
-    // If we're on the same port as the backend, use current origin
-    if (currentOrigin.includes(':3001')) {
-      return currentOrigin;
-    }
-  }
-  
-  // Fallback to environment variable or localhost for development
-  return process.env.REACT_APP_API_URL || 'http://localhost:3001';
-};
-
-const API_BASE_URL = getApiBaseUrl();
+import { API_BASE_URL } from '../utils/api';
 
 export class NotionService {
   /**

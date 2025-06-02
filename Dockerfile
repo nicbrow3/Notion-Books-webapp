@@ -67,6 +67,18 @@ ENV NODE_ENV=production
 ENV PORT=3001
 ENV SESSION_SECRET=change-this-in-production
 
+# Frontend URL - update to match your server
+ENV FRONTEND_URL=http://your-server-ip:3001
+
+# Security & Performance Settings
+ENV RATE_LIMIT_WINDOW_MS=900000
+ENV RATE_LIMIT_MAX_REQUESTS=100
+ENV SESSION_COOKIE_MAX_AGE=86400000
+
+# ==============================================
+# API KEYS - Configure these in your Docker UI
+# ==============================================
+
 # REQUIRED: Notion Integration Token
 # Get from https://www.notion.so/my-integrations
 ENV NOTION_INTEGRATION_TOKEN=""
@@ -75,13 +87,23 @@ ENV NOTION_INTEGRATION_TOKEN=""
 # Get from https://console.developers.google.com/
 ENV GOOGLE_BOOKS_API_KEY=""
 
-# Frontend URL - update to match your server
-ENV FRONTEND_URL=http://your-server-ip:3001
+# ==============================================
+# Docker Labels for UI Configuration
+# ==============================================
 
-# Security & Performance Settings
-ENV RATE_LIMIT_WINDOW_MS=900000
-ENV RATE_LIMIT_MAX_REQUESTS=100
-ENV SESSION_COOKIE_MAX_AGE=86400000
+# Labels to help Docker UIs show these as configurable options
+LABEL io.hass.name="Notion Books"
+LABEL io.hass.description="Web application for managing book collections with Notion integration"
+LABEL io.hass.url="https://github.com/yourusername/notion-books-webapp"
+LABEL io.hass.version="latest"
+LABEL io.hass.type="addon"
+LABEL io.hass.arch="amd64|aarch64"
+
+# Environment variable descriptions for Docker UIs
+LABEL io.hass.config.NOTION_INTEGRATION_TOKEN="Notion integration token from https://www.notion.so/my-integrations (required)"
+LABEL io.hass.config.GOOGLE_BOOKS_API_KEY="Google Books API key from Google Cloud Console (optional)"
+LABEL io.hass.config.SESSION_SECRET="Secure session encryption key (32+ characters recommended)"
+LABEL io.hass.config.FRONTEND_URL="Frontend URL matching your server IP (e.g., http://192.168.1.100:3001)"
 
 # Expose the backend port
 EXPOSE 3001

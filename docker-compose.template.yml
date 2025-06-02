@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  notion-books:
+    image: ghcr.io/yourusername/notion-books-webapp:latest
+    container_name: notion-books
+    ports:
+      - "3001:3001"
+    environment:
+      # ==============================================
+      # REQUIRED: Copy your API keys here
+      # ==============================================
+      
+      # Get from: https://www.notion.so/my-integrations
+      - NOTION_INTEGRATION_TOKEN=secret_your_notion_token_here
+      
+      # Get from: https://console.developers.google.com/ (optional)
+      - GOOGLE_BOOKS_API_KEY=your_google_books_api_key_here
+      
+      # ==============================================
+      # APPLICATION SETTINGS (modify as needed)
+      # ==============================================
+      
+      # Change this to a secure random string (32+ characters)
+      - SESSION_SECRET=change-this-to-a-secure-random-string
+      
+      # Update this to match your server's IP address
+      # For local: http://localhost:3001
+      # For server: http://YOUR_SERVER_IP:3001
+      - FRONTEND_URL=http://localhost:3001
+      
+      # ==============================================
+      # SYSTEM SETTINGS (usually don't need to change)
+      # ==============================================
+      
+      - NODE_ENV=production
+      - PORT=3001
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - SESSION_COOKIE_MAX_AGE=86400000
+      
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+# Optional: Uncomment to use with external database (not needed for basic setup)
+# volumes:
+#   postgres_data: 

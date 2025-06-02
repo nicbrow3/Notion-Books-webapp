@@ -193,6 +193,41 @@ If you see CORS (Cross-Origin Resource Sharing) errors in the browser console:
 FRONTEND_URL=http://YOUR_ACTUAL_SERVER_IP:3001
 ```
 
+#### Environment Variables Not Showing Up
+
+If environment variables don't appear automatically in your Docker UI:
+
+**Problem:** Variables like `NOTION_INTEGRATION_TOKEN` and `GOOGLE_BOOKS_API_KEY` aren't visible in Unraid's Docker container settings.
+
+**Solution:** 
+1. **Manual Addition**: Click "Add another Path, Port, Variable, Label or Device" in Unraid
+2. **Add Required Variables**:
+   - `NOTION_INTEGRATION_TOKEN` = `secret_your_actual_token_here`
+   - `GOOGLE_BOOKS_API_KEY` = `your_api_key_here`
+   - `SESSION_SECRET` = `your_secure_random_string`
+   - `FRONTEND_URL` = `http://YOUR_SERVER_IP:3001`
+
+**Template**: Use the `docker-compose.template.yml` file for easy copy-paste configuration.
+
+#### Connection Refused Errors
+
+If you see `ERR_CONNECTION_REFUSED` in browser console:
+
+**Problem:** Frontend can't connect to backend API endpoints.
+
+**Symptoms:**
+```
+GET http://localhost:3001/api/books/test/connection net::ERR_CONNECTION_REFUSED
+GET http://localhost:3001/api/books/suggestions?q=... net::ERR_CONNECTION_REFUSED
+```
+
+**Solution:**
+1. **Check Container Status**: Ensure the container is running in Unraid Docker tab
+2. **Verify Port Mapping**: Container port 3001 should be mapped to your chosen host port
+3. **Check Logs**: Look for "🚀 Starting Notion Books..." and "🌟 Starting backend server..." messages
+4. **Test Health Endpoint**: `curl http://YOUR_UNRAID_IP:3001/health`
+5. **Check Environment**: Verify `FRONTEND_URL` matches your server's IP and port
+
 #### Method 2: Using Docker Compose in Unraid
 
 If you want the full setup with database:
@@ -470,6 +505,41 @@ If you see CORS (Cross-Origin Resource Sharing) errors in the browser console:
 # In Unraid Docker settings, set:
 FRONTEND_URL=http://YOUR_ACTUAL_SERVER_IP:3001
 ```
+
+#### Environment Variables Not Showing Up
+
+If environment variables don't appear automatically in your Docker UI:
+
+**Problem:** Variables like `NOTION_INTEGRATION_TOKEN` and `GOOGLE_BOOKS_API_KEY` aren't visible in Unraid's Docker container settings.
+
+**Solution:** 
+1. **Manual Addition**: Click "Add another Path, Port, Variable, Label or Device" in Unraid
+2. **Add Required Variables**:
+   - `NOTION_INTEGRATION_TOKEN` = `secret_your_actual_token_here`
+   - `GOOGLE_BOOKS_API_KEY` = `your_api_key_here`
+   - `SESSION_SECRET` = `your_secure_random_string`
+   - `FRONTEND_URL` = `http://YOUR_SERVER_IP:3001`
+
+**Template**: Use the `docker-compose.template.yml` file for easy copy-paste configuration.
+
+#### Connection Refused Errors
+
+If you see `ERR_CONNECTION_REFUSED` in browser console:
+
+**Problem:** Frontend can't connect to backend API endpoints.
+
+**Symptoms:**
+```
+GET http://localhost:3001/api/books/test/connection net::ERR_CONNECTION_REFUSED
+GET http://localhost:3001/api/books/suggestions?q=... net::ERR_CONNECTION_REFUSED
+```
+
+**Solution:**
+1. **Check Container Status**: Ensure the container is running in Unraid Docker tab
+2. **Verify Port Mapping**: Container port 3001 should be mapped to your chosen host port
+3. **Check Logs**: Look for "🚀 Starting Notion Books..." and "🌟 Starting backend server..." messages
+4. **Test Health Endpoint**: `curl http://YOUR_UNRAID_IP:3001/health`
+5. **Check Environment**: Verify `FRONTEND_URL` matches your server's IP and port
 
 #### Method 2: Using Docker Compose in Unraid
 
