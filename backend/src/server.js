@@ -27,7 +27,11 @@ const limiter = rateLimit({
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginOpenerPolicy: false, // Disable COOP to avoid HTTPS requirement
+  crossOriginEmbedderPolicy: false, // Disable COEP 
+  contentSecurityPolicy: false, // Disable CSP for now to avoid conflicts
+}));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? process.env.FRONTEND_URL 
