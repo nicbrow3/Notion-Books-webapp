@@ -30,6 +30,7 @@ Use the deployment script or manual setup to create the container without API ke
 | `NOTION_INTEGRATION_TOKEN` | `secret_your_token_here` | Your Notion integration token |
 | `GOOGLE_BOOKS_API_KEY` | `your_api_key_here` | Google Books API key (optional) |
 | `SESSION_SECRET` | `your-secure-random-string` | Session encryption key |
+| `FRONTEND_URL` | `http://192.168.50.133:3001` | Your server's IP and port |
 
 6. Click **Apply** to restart the container with new settings
 
@@ -115,6 +116,7 @@ For local testing before deploying to Unraid:
 NOTION_INTEGRATION_TOKEN=secret_your_token_here
 GOOGLE_BOOKS_API_KEY=your_google_api_key_here  
 SESSION_SECRET=your-32-char-random-string
+FRONTEND_URL=http://your-server-ip:3001
 ```
 
 **Container Settings:**

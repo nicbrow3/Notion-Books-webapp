@@ -49,14 +49,18 @@ COPY test-static.html ./frontend/build/test.html
 # Verify frontend files were copied correctly
 RUN ls -la frontend/build/ && echo "Frontend files copied to production stage"
 
-# Set environment variables for browser-based storage
+# Set default environment variables (these will show up in Unraid UI)
 ENV NODE_ENV=production
 ENV PORT=3001
-ENV SESSION_SECRET=default-session-secret-change-in-production
-ENV FRONTEND_URL=http://localhost:3001
+ENV SESSION_SECRET=change-this-in-production
+ENV FRONTEND_URL=http://your-server-ip:3001
 ENV RATE_LIMIT_WINDOW_MS=900000
 ENV RATE_LIMIT_MAX_REQUESTS=100
 ENV SESSION_COOKIE_MAX_AGE=86400000
+
+# API Keys - set as empty by default, users will fill these in via Unraid UI
+ENV NOTION_INTEGRATION_TOKEN=""
+ENV GOOGLE_BOOKS_API_KEY=""
 
 # Expose the backend port
 EXPOSE 3001

@@ -32,12 +32,40 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false, // Disable COEP 
   contentSecurityPolicy: false, // Disable CSP for now to avoid conflicts
 }));
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL 
-    : 'http://localhost:3000',
+
+// CORS configuration - more flexible for production deployments
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (process.env.NODE_ENV === 'development') {
+      // In development, allow localhost on any port
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+    } else {
+      // In production, allow the configured frontend URL and same-origin requests
+      const allowedOrigins = [
+        process.env.FRONTEND_URL,
+        `http://localhost:${process.env.PORT || 3001}`,
+        // Allow any origin that matches the server's port (for IP-based access)
+        origin.includes(`:${process.env.PORT || 3001}`)
+      ];
+      
+      if (allowedOrigins.some(allowed => allowed === origin || (typeof allowed === 'boolean' && allowed))) {
+        return callback(null, true);
+      }
+    }
+    
+    // If we get here, the origin is not allowed
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
+
 // Only apply rate limiting in production
 if (process.env.NODE_ENV === 'production') {
   app.use(limiter);
