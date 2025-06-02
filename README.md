@@ -327,3 +327,163 @@ When available, the following audiobook data is included:
 ## License
 
 MIT License - see LICENSE file for details 
+
+# Notion Books Web Application
+
+A web application for managing and organizing your book collection with Notion integration.
+
+## Features
+
+- Book collection management
+- Notion integration for syncing book data
+- User authentication and sessions
+- Modern React frontend with responsive design
+- RESTful API backend
+
+## Quick Start
+
+### Using Docker (Recommended)
+
+#### Option 1: Docker Compose (Full Setup with Database)
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd notion-books-webapp
+
+# Start the application
+docker-compose up -d
+
+# Access the application at http://localhost:8080
+```
+
+#### Option 2: Single Container (Standalone)
+```bash
+# Pull and run the latest image
+docker run -d \
+  --name notion-books \
+  -p 3001:3001 \
+  -e SESSION_SECRET=your-secure-session-secret \
+  ghcr.io/yourusername/notion-books-webapp:latest
+
+# Access the application at http://localhost:3001
+```
+
+### Unraid Deployment
+
+#### Method 1: Using Docker Hub/GitHub Container Registry
+
+1. **Add Container in Unraid:**
+   - Go to Docker tab in Unraid
+   - Click "Add Container"
+   - Use repository: `ghcr.io/yourusername/notion-books-webapp:latest`
+
+2. **Port Configuration:**
+   - Container Port: `3001`
+   - Host Port: `3001` (or any available port you prefer)
+   - Connection Type: `bridge`
+
+3. **Environment Variables (Optional but Recommended):**
+   - `SESSION_SECRET`: Set a secure random string
+   - `NODE_ENV`: `production`
+   - `PORT`: `3001`
+
+4. **Access:**
+   - Visit `http://YOUR_UNRAID_IP:3001`
+
+#### Method 2: Using Docker Compose in Unraid
+
+If you want the full setup with database:
+
+1. **Install Compose Manager plugin** (if not already installed)
+2. **Create compose file** in `/mnt/user/appdata/notion-books/docker-compose.yml`
+3. **Use the provided docker-compose.yml** from this repository
+4. **Start via Compose Manager**
+
+### Troubleshooting
+
+#### "Can't access the web interface"
+1. **Check port mapping**: Ensure the container port 3001 is mapped to a host port
+2. **Check Unraid firewall**: Make sure the port is not blocked
+3. **Verify container is running**: Check Docker tab in Unraid
+4. **Check logs**: Look for "🚀 Server running on port 3001" message
+
+#### Container Health Check
+- The container includes a health check endpoint at `/health`
+- You can verify it's working: `curl http://YOUR_UNRAID_IP:3001/health`
+- Should return: `{"status":"OK","timestamp":"...","environment":"production","storage":"browser-local-storage"}`
+
+#### Data Storage
+- This application uses **browser local storage** for data persistence
+- No database is required - all data is stored locally in your browser
+- Data will persist between browser sessions but is tied to the specific browser/device
+- To backup your data, use the export functionality in the app (if available)
+
+### Development
+
+#### Prerequisites
+- Node.js 18+
+- PostgreSQL (optional, for full features)
+
+#### Setup
+```bash
+# Install dependencies
+cd frontend && npm install
+cd ../backend && npm install
+
+# Set up environment variables
+cp backend/.env.example backend/.env
+# Edit backend/.env with your configuration
+
+# Start development servers
+# Terminal 1 - Backend
+cd backend && npm run dev
+
+# Terminal 2 - Frontend  
+cd frontend && npm start
+```
+
+## Docker Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NODE_ENV` | `production` | Application environment |
+| `PORT` | `3001` | Server port |
+| `SESSION_SECRET` | `default-session-secret-change-in-production` | Session encryption key |
+| `FRONTEND_URL` | `http://localhost:3001` | Frontend URL for CORS |
+| `RATE_LIMIT_WINDOW_MS` | `900000` | Rate limit window (15 minutes) |
+| `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per window |
+| `SESSION_COOKIE_MAX_AGE` | `86400000` | Session cookie lifetime (24 hours) |
+
+### Ports
+
+- **3001**: Main application port (HTTP)
+
+### Data Storage
+
+This application uses browser local storage for data persistence:
+- No external database required
+- Data is stored locally in the user's browser
+- Sessions use memory store (will reset on container restart)
+- Suitable for single-user or small-scale deployments
+
+## API Endpoints
+
+- `GET /health` - Health check endpoint
+- `POST /auth/*` - Authentication routes
+- `GET /api/books/*` - Book management routes
+- `GET /api/notion/*` - Notion integration routes
+- `GET /api/user/*` - User management routes
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
+
+[Your License Here] 

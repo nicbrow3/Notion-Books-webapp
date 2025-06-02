@@ -46,9 +46,14 @@ COPY --from=frontend-builder /app/frontend/build ./frontend/build
 # Copy root config files
 COPY config.json ./
 
-# Set environment variables
+# Set environment variables for browser-based storage
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV SESSION_SECRET=default-session-secret-change-in-production
+ENV FRONTEND_URL=http://localhost:3001
+ENV RATE_LIMIT_WINDOW_MS=900000
+ENV RATE_LIMIT_MAX_REQUESTS=100
+ENV SESSION_COOKIE_MAX_AGE=86400000
 
 # Expose the backend port
 EXPOSE 3001

@@ -3,9 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
 const rateLimit = require('express-rate-limit');
-const { Pool } = require('pg');
 const path = require('path');
 
 // Import routes
@@ -16,33 +14,6 @@ const userRoutes = require('./routes/user');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Database connection
-let pool = null;
-let dbConnected = false;
-
-try {
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-  });
-
-  // Test database connection
-  pool.connect((err, client, release) => {
-    if (err) {
-      console.warn('⚠️  Database connection failed:', err.message);
-      console.log('🚀 Server will start without database (some features will be limited)');
-      dbConnected = false;
-    } else {
-      console.log('✅ Connected to PostgreSQL database');
-      dbConnected = true;
-      release();
-    }
-  });
-} catch (error) {
-  console.warn('⚠️  Database setup failed:', error.message);
-  console.log('🚀 Server will start without database (some features will be limited)');
-}
 
 // Rate limiting - more permissive in development
 const limiter = rateLimit({
@@ -70,7 +41,7 @@ if (process.env.NODE_ENV === 'production') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Session configuration
+// Session configuration - using memory store (suitable for single-instance deployment)
 const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'fallback-secret-key',
   resave: false,
@@ -81,16 +52,6 @@ const sessionConfig = {
     maxAge: parseInt(process.env.SESSION_COOKIE_MAX_AGE) || 24 * 60 * 60 * 1000 // 24 hours
   }
 };
-
-// Only use database session store if database is connected
-if (pool && dbConnected) {
-  sessionConfig.store = new pgSession({
-    pool: pool,
-    tableName: 'session'
-  });
-} else {
-  console.log('💾 Using memory session store (sessions will not persist across restarts)');
-}
 
 app.use(session(sessionConfig));
 
@@ -111,7 +72,7 @@ app.get('/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    database: dbConnected ? 'connected' : 'disconnected'
+    storage: 'browser-local-storage'
   });
 });
 
@@ -145,14 +106,12 @@ app.use((err, req, res, next) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
-  pool.end(() => {
-    console.log('Database pool closed');
-    process.exit(0);
-  });
+  process.exit(0);
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  console.log(`📱 Using browser local storage for data persistence`);
 });
 
 module.exports = app; 
