@@ -20,6 +20,8 @@ services:
       - RATE_LIMIT_WINDOW_MS=900000
       - RATE_LIMIT_MAX_REQUESTS=100
       - SESSION_COOKIE_MAX_AGE=86400000
+      # Disable secure cookies for HTTP deployments
+      - DISABLE_SECURE_COOKIES=true
       # Frontend API URL - this tells the React app where to find the backend
       - REACT_APP_API_URL=http://localhost:3001
     restart: unless-stopped

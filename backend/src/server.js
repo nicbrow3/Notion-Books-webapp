@@ -84,7 +84,8 @@ const sessionConfig = {
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    // Only use secure cookies if HTTPS is explicitly enabled, not just because it's production
+    secure: process.env.FORCE_HTTPS === 'true' || (process.env.NODE_ENV === 'production' && process.env.DISABLE_SECURE_COOKIES !== 'true'),
     httpOnly: true,
     maxAge: parseInt(process.env.SESSION_COOKIE_MAX_AGE) || 24 * 60 * 60 * 1000 // 24 hours
   }

@@ -75,6 +75,9 @@ ENV RATE_LIMIT_WINDOW_MS=900000
 ENV RATE_LIMIT_MAX_REQUESTS=100
 ENV SESSION_COOKIE_MAX_AGE=86400000
 
+# Disable secure cookies for HTTP deployments (Docker/local)
+ENV DISABLE_SECURE_COOKIES=true
+
 # ==============================================
 # API KEYS - Configure these in your Docker UI
 # ==============================================
