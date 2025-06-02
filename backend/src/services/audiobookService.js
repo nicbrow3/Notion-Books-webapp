@@ -633,6 +633,7 @@ class AudiobookService {
       summary: book.summary,
       rating: book.rating,
       releaseDate: book.releaseDate,
+      publishedDate: book.releaseDate,
       isbn: book.isbn,
       language: book.language,
       isAdult: book.isAdult,

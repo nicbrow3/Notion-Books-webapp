@@ -376,6 +376,7 @@ router.get('/notion-settings', requireAuth, async (req, res) => {
             us.notion_database_id as databaseId,
             us.field_mappings as fieldMapping,
             us.default_properties as defaultValues,
+            us.default_published_date_type as defaultPublishedDateType,
             us.created_at,
             us.updated_at,
             u.notion_workspace_name,
@@ -439,6 +440,7 @@ router.get('/notion-settings', requireAuth, async (req, res) => {
       databaseId: null,
       fieldMapping: {},
       defaultValues: {},
+      defaultPublishedDateType: 'original',
       workspaceName: req.session.notionWorkspaceName || null,
       email: req.session.notionEmail || null
     };
@@ -465,25 +467,28 @@ router.put('/notion-settings', requireAuth, async (req, res) => {
     const {
       databaseId,
       fieldMapping,
-      defaultValues
+      defaultValues,
+      defaultPublishedDateType
     } = req.body;
 
     // Check if database is available
     if (pool) {
       try {
         const query = `
-          INSERT INTO user_settings (user_id, notion_database_id, field_mappings, default_properties)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO user_settings (user_id, notion_database_id, field_mappings, default_properties, default_published_date_type)
+          VALUES ($1, $2, $3, $4, $5)
           ON CONFLICT (user_id) 
           DO UPDATE SET 
             notion_database_id = EXCLUDED.notion_database_id,
             field_mappings = EXCLUDED.field_mappings,
             default_properties = EXCLUDED.default_properties,
+            default_published_date_type = EXCLUDED.default_published_date_type,
             updated_at = CURRENT_TIMESTAMP
           RETURNING 
             notion_database_id as databaseId,
             field_mappings as fieldMapping,
             default_properties as defaultValues,
+            default_published_date_type as defaultPublishedDateType,
             updated_at;
         `;
 
@@ -491,7 +496,8 @@ router.put('/notion-settings', requireAuth, async (req, res) => {
           req.session.userId,
           databaseId || null,
           JSON.stringify(fieldMapping || {}),
-          JSON.stringify(defaultValues || {})
+          JSON.stringify(defaultValues || {}),
+          defaultPublishedDateType || 'original'
         ]);
 
         const settings = result.rows[0];
@@ -523,6 +529,7 @@ router.put('/notion-settings', requireAuth, async (req, res) => {
         databaseId: databaseId || null,
         fieldMapping: fieldMapping || {},
         defaultValues: defaultValues || {},
+        defaultPublishedDateType: defaultPublishedDateType || 'original',
         workspaceName: req.session.notionWorkspaceName || null,
         email: req.session.notionEmail || null,
         updatedAt: new Date().toISOString()
@@ -551,6 +558,7 @@ router.put('/notion-settings', requireAuth, async (req, res) => {
       databaseId: databaseId || null,
       fieldMapping: fieldMapping || {},
       defaultValues: defaultValues || {},
+      defaultPublishedDateType: defaultPublishedDateType || 'original',
       workspaceName: req.session.notionWorkspaceName || null,
       email: req.session.notionEmail || null,
       updatedAt: new Date().toISOString()

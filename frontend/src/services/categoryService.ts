@@ -106,13 +106,96 @@ export class CategoryService {
   static splitCategories(categories: string[]): string[] {
     const split: string[] = [];
     
+    // Well-known compound genres that should not be split
+    const preservedCompoundGenres = [
+      'health & fitness',
+      'health & wellness',
+      'home & garden',
+    ];
+    
     categories.forEach(category => {
       if (category.includes(',')) {
         // Split by comma and clean each part
         const parts = category.split(',').map(part => part.trim()).filter(part => part.length > 0);
         split.push(...parts);
       } else {
+        // Check if this is a preserved compound genre
+        const isPreservedCompound = preservedCompoundGenres.some(preserved => 
+          category.toLowerCase().includes(preserved)
+        );
+        
+        if (isPreservedCompound) {
+          // Don't split compound genres, just clean them up
+          split.push(category.trim());
+        } else {
+          split.push(category.trim());
+        }
+      }
+    });
+    
+    return split.filter(cat => cat.length > 0);
+  }
+
+  /**
+   * Split comma-separated categories and clean them up, while preserving audiobook genres
+   */
+  static splitCategoriesWithAudiobookPreservation(categories: string[], audiobookGenres: string[] = []): string[] {
+    const split: string[] = [];
+    
+    // Well-known compound genres that should not be split
+    const preservedCompoundGenres = [
+      'health & fitness',
+      'health & wellness',
+      'home & garden',
+    ];
+    
+    // Create a lowercase set of audiobook genres for comparison
+    const audiobookGenresLower = audiobookGenres.map(g => g.toLowerCase());
+    
+    categories.forEach(category => {
+      // Check if this category is an audiobook genre - if so, preserve it intact
+      if (audiobookGenresLower.includes(category.toLowerCase())) {
         split.push(category.trim());
+        return;
+      }
+      
+      if (category.includes(',')) {
+        // Split by comma and clean each part
+        const parts = category.split(',').map(part => part.trim()).filter(part => part.length > 0);
+        split.push(...parts);
+      } else {
+        // Check if this is a preserved compound genre
+        const isPreservedCompound = preservedCompoundGenres.some(preserved => 
+          category.toLowerCase().includes(preserved)
+        );
+        
+        if (isPreservedCompound) {
+          // Don't split compound genres, just clean them up
+          split.push(category.trim());
+        } else {
+          // Apply standard splitting logic for "&" and " and " but not for audiobook genres
+          let parts = [category];
+          
+          // Split by ampersand
+          if (category.includes('&')) {
+            parts = category.split('&');
+          }
+          
+          // Then split each part by " and " (with spaces to avoid splitting words like "brand")
+          const finalParts: string[] = [];
+          parts.forEach(part => {
+            if (part.toLowerCase().includes(' and ')) {
+              const andParts = part.split(/ and /i) // Case insensitive split
+                .map(p => p.trim())
+                .filter(p => p.length > 0);
+              finalParts.push(...andParts);
+            } else {
+              finalParts.push(part.trim());
+            }
+          });
+          
+          split.push(...finalParts);
+        }
       }
     });
     
@@ -122,12 +205,101 @@ export class CategoryService {
   /**
    * Apply category mappings and remove ignored categories
    */
-  static processCategories(categories: string[], settings: CategorySettings): {
+  static processCategories(
+    categories: string[], 
+    settings: CategorySettings, 
+    audiobookData?: any
+  ): {
     processed: string[];
     ignored: string[];
     mapped: { [original: string]: string };
   } {
-    const splitCategories = this.splitCategories(categories);
+    // Determine which splitting function to use based on audiobook data availability
+    let splitCategories: string[];
+    
+    if (audiobookData?.genres && Array.isArray(audiobookData.genres) && audiobookData.genres.length > 0) {
+      // We have audiobook data with actual genres, use audiobook-aware splitting
+      const rawAudiobookGenres = audiobookData.genres.map((genre: any) => 
+        typeof genre === 'string' ? genre : genre?.name || ''
+      ).filter((name: string) => name.length > 0);
+      
+      // Split compound audiobook genres first (they might contain & or "and")
+      const splitAudiobookGenres: string[] = [];
+      rawAudiobookGenres.forEach((genre: string) => {
+        let parts = [genre];
+        
+        // Split by ampersand
+        if (genre.includes('&')) {
+          parts = genre.split('&');
+        }
+        
+        // Then split each part by " and " (with spaces to avoid splitting words like "brand")
+        const finalParts: string[] = [];
+        parts.forEach((part: string) => {
+          if (part.toLowerCase().includes(' and ')) {
+            const andParts = part.split(/ and /i)
+              .map((p: string) => p.trim())
+              .filter((p: string) => p.length > 0);
+            finalParts.push(...andParts);
+          } else {
+            finalParts.push(part.trim());
+          }
+        });
+        
+        splitAudiobookGenres.push(...finalParts);
+      });
+      
+      // Remove duplicates and filter clean split audiobook genres
+      const cleanAudiobookGenres = Array.from(new Set(splitAudiobookGenres))
+        .map(genre => genre.trim())
+        .filter(genre => genre.length > 0);
+      
+      // Only log if there are actually audiobook genres to preserve
+      if (cleanAudiobookGenres.length > 0) {
+        console.log(`🎧 Processing categories with audiobook genre preservation (${cleanAudiobookGenres.length} genres)`);
+      }
+      splitCategories = this.splitCategoriesWithAudiobookPreservation(categories, cleanAudiobookGenres);
+    } else if (audiobookData && 
+               (audiobookData.hasAudiobook === false || 
+                audiobookData.source === 'error' ||
+                (audiobookData.hasAudiobook === true && (!audiobookData.genres || audiobookData.genres.length === 0)))) {
+      // We confirmed audiobook status (no audiobook, error, or audiobook with no genres) - safe to split normally
+      // Reduced logging frequency - only log once per book
+      splitCategories = this.splitCategories(categories);
+      
+      // Apply standard splitting logic for "&" and " and "
+      const furtherSplit: string[] = [];
+      splitCategories.forEach(category => {
+        let parts = [category];
+        
+        // Split by ampersand
+        if (category.includes('&')) {
+          parts = category.split('&');
+        }
+        
+        // Then split each part by " and " (with spaces to avoid splitting words like "brand")
+        const finalParts: string[] = [];
+        parts.forEach(part => {
+          if (part.toLowerCase().includes(' and ')) {
+            const andParts = part.split(/ and /i) // Case insensitive split
+              .map(p => p.trim())
+              .filter(p => p.length > 0);
+            finalParts.push(...andParts);
+          } else {
+            finalParts.push(part.trim());
+          }
+        });
+        
+        furtherSplit.push(...finalParts);
+      });
+      
+      splitCategories = furtherSplit.filter(cat => cat.length > 0);
+    } else {
+      // No audiobook data yet, don't split anything with & or "and" to preserve compound genres
+      // Reduced logging - only log when actually preserving compound categories
+      splitCategories = this.splitCategories(categories);
+    }
+    
     const processed: string[] = [];
     const ignored: string[] = [];
     const mapped: { [original: string]: string } = {};
@@ -141,7 +313,7 @@ export class CategoryService {
         return;
       }
 
-      // Check for mapping
+      // Check if category has a mapping
       const mappedCategory = settings.categoryMappings[lowerCategory];
       if (mappedCategory) {
         mapped[category] = mappedCategory;

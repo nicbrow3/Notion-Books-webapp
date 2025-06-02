@@ -55,18 +55,30 @@ const BookEditionsModal: React.FC<BookEditionsModalProps> = ({
   const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'Unknown';
     
-    // If it's just a year, return it as is
-    if (/^\d{4}$/.test(dateString)) {
-      return dateString;
-    }
-    
-    // Try to parse as a date
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return dateString; // Return original if can't parse
+      // Check if it's just a year (4 digits) - show only the year
+      if (/^\d{4}$/.test(dateString.trim())) {
+        return dateString.trim(); // Just show "2023" instead of "January 1, 2023"
       }
-      return date.getFullYear().toString();
+      
+      // Try to parse the full date
+      const date = new Date(dateString);
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        // If invalid date but contains a year, extract and use just the year
+        const yearMatch = dateString.match(/\d{4}/);
+        if (yearMatch) {
+          return yearMatch[0]; // Just show the year
+        }
+        return dateString; // Return original if we can't parse anything
+      }
+      
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
     } catch {
       return dateString;
     }

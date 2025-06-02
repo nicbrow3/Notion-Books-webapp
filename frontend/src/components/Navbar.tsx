@@ -1,11 +1,25 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
 
 const Navbar: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, user, logout } = useAuth();
 
   const isActive = (path: string) => {
     return location.pathname === path;
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Successfully logged out');
+      navigate('/');
+    } catch (error) {
+      toast.error('Failed to logout');
+    }
   };
 
   return (
@@ -38,33 +52,54 @@ const Navbar: React.FC = () => {
               >
                 📝 Notion Integration
               </Link>
-              <Link
-                to="/dashboard"
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive('/dashboard')
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                Dashboard
-              </Link>
-              <Link
-                to="/settings"
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive('/settings')
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                Settings
-              </Link>
+              {isAuthenticated && (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive('/dashboard')
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to="/settings"
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive('/settings')
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    Settings
+                  </Link>
+                </>
+              )}
             </div>
           </div>
           
           <div className="flex items-center space-x-4">
-            <button className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
-              Login
-            </button>
+            {isAuthenticated && user ? (
+              <div className="flex items-center space-x-3">
+                <span className="text-sm text-gray-600">
+                  Welcome, {user.name}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border border-gray-300 hover:border-gray-400 transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/notion"
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border border-gray-300 hover:border-gray-400 transition-colors"
+              >
+                Connect to Notion
+              </Link>
+            )}
           </div>
         </div>
       </div>

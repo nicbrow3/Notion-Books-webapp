@@ -21,6 +21,38 @@ module.exports = {
       },
       fontFamily: {
         'inter': ['Inter', 'sans-serif'],
+      },
+      animation: {
+        'in': 'fadeIn 0.7s ease-in-out',
+        'fade-in': 'fadeIn 0.5s ease-out',
+        'slide-in-from-bottom': 'slideInFromBottom 0.6s ease-out',
+        'slide-in-from-top': 'slideInFromTop 0.6s ease-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideInFromBottom: {
+          '0%': { 
+            opacity: '0',
+            transform: 'translateY(16px) scale(0.95)'
+          },
+          '100%': { 
+            opacity: '1',
+            transform: 'translateY(0) scale(1)'
+          },
+        },
+        slideInFromTop: {
+          '0%': { 
+            opacity: '0',
+            transform: 'translateY(-16px) scale(0.95)'
+          },
+          '100%': { 
+            opacity: '1',
+            transform: 'translateY(0) scale(1)'
+          },
+        },
       }
     },
   },

@@ -109,6 +109,14 @@ export interface BookToNotionMapping {
   pageIcon?: boolean; // Whether to set the cover image as the page icon
   status?: string; // Notion property name for reading status
   notes?: string; // Notion property name for personal notes
+  // Audiobook-specific fields
+  audiobookPublisher?: string; // Notion property name for audiobook publisher
+  audiobookChapters?: string; // Notion property name for audiobook chapter count
+  audiobookASIN?: string; // Notion property name for audiobook ASIN
+  audiobookNarrators?: string; // Notion property name for audiobook narrators
+  audiobookDuration?: string; // Notion property name for audiobook duration
+  audiobookURL?: string; // Notion property name for audiobook URL (Audible link)
+  audiobookRating?: string; // Notion property name for audiobook rating
 }
 
 export interface NotionIntegrationSettings {

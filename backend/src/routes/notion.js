@@ -39,7 +39,15 @@ const generateFieldMappings = (notionProperties) => {
     thumbnail: { type: 'files', priority: 2, keywords: ['cover', 'image', 'thumbnail', 'picture'] },
     language: { type: 'select', priority: 2, keywords: ['language', 'lang'] },
     averageRating: { type: 'number', priority: 2, keywords: ['rating', 'score', 'stars'] },
-    ratingsCount: { type: 'number', priority: 3, keywords: ['ratings', 'reviews', 'count'] }
+    ratingsCount: { type: 'number', priority: 3, keywords: ['ratings', 'reviews', 'count'] },
+    // Audiobook-specific fields
+    audiobookPublisher: { type: 'select', priority: 2, keywords: ['audiobook', 'audio', 'publisher', 'audible', 'narrator', 'voice'] },
+    audiobookChapters: { type: 'number', priority: 2, keywords: ['chapters', 'chapter', 'parts', 'sections', 'audiobook'] },
+    audiobookASIN: { type: 'rich_text', priority: 2, keywords: ['asin', 'amazon', 'audible', 'id', 'identifier'] },
+    audiobookNarrators: { type: 'multi_select', priority: 2, keywords: ['narrator', 'narrators', 'voice', 'reader', 'audiobook'] },
+    audiobookDuration: { type: 'rich_text', priority: 2, keywords: ['duration', 'length', 'time', 'runtime', 'hours', 'minutes'] },
+    audiobookURL: { type: 'url', priority: 2, keywords: ['url', 'link', 'audible', 'audiobook', 'purchase'] },
+    audiobookRating: { type: 'rich_text', priority: 2, keywords: ['rating', 'score', 'stars'] }
   };
 
   const mappings = {};
@@ -480,15 +488,102 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
         return isNaN(numValue) ? null : { number: numValue };
 
       case 'date':
-        // Try to parse date string
+        // ⚠️ CRITICAL: ALWAYS USE ACTUAL FOUND DATES - DO NOT REMOVE THIS LOGIC
+        // Users report seeing "Jan 1" fallbacks when real dates exist
+        // This logic ensures we preserve any actual date data we have
         let dateValue = value;
-        if (typeof value === 'string') {
-          // Handle various date formats
-          const parsedDate = new Date(value);
-          if (!isNaN(parsedDate.getTime())) {
-            dateValue = parsedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+        console.log(`📅 Processing date field "${propertyName}":`, {
+          originalValue: value,
+          valueType: typeof value
+        });
+        
+        if (typeof value === 'string' && value.trim()) {
+          // Check if it's already in YYYY-MM-DD format
+          if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+            // Already in correct format, use as-is
+            dateValue = value.trim();
+            console.log(`📅 Date already in YYYY-MM-DD format for "${propertyName}":`, dateValue);
+          } else {
+            // ⚠️ CRITICAL: Try multiple date parsing strategies before falling back to Jan 1st
+            let parsedSuccessfully = false;
+            
+            // Strategy 1: Try direct Date parsing
+            const parsedDate = new Date(value);
+            console.log(`📅 Parsed date for "${propertyName}":`, {
+              originalString: value,
+              parsedDate: parsedDate,
+              isValidDate: !isNaN(parsedDate.getTime()),
+              isoString: !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : 'invalid'
+            });
+            
+            if (!isNaN(parsedDate.getTime())) {
+              // To avoid timezone issues, if the original string was in YYYY-MM-DD format
+              // or looks like a date, extract the date components directly
+              const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+              if (isoMatch) {
+                dateValue = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+              } else {
+                dateValue = parsedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+              }
+              parsedSuccessfully = true;
+            } else {
+              // Strategy 2: Try parsing various formats manually before giving up
+              // Format: "MM/DD/YYYY" or "MM-DD-YYYY"
+              const mdyMatch = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+              if (mdyMatch) {
+                const month = mdyMatch[1].padStart(2, '0');
+                const day = mdyMatch[2].padStart(2, '0');
+                const year = mdyMatch[3];
+                dateValue = `${year}-${month}-${day}`;
+                parsedSuccessfully = true;
+                console.log(`📅 Parsed M/D/Y format for "${propertyName}":`, dateValue);
+              }
+              
+              // Format: "DD/MM/YYYY" or "DD-MM-YYYY" (try if M/D/Y didn't work)
+              if (!parsedSuccessfully) {
+                const dmyMatch = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                if (dmyMatch) {
+                  const day = dmyMatch[1].padStart(2, '0');
+                  const month = dmyMatch[2].padStart(2, '0');
+                  const year = dmyMatch[3];
+                  // Only use if day > 12 (impossible month) or month <= 12
+                  if (parseInt(day) > 12 || parseInt(month) <= 12) {
+                    dateValue = `${year}-${month}-${day}`;
+                    parsedSuccessfully = true;
+                    console.log(`📅 Parsed D/M/Y format for "${propertyName}":`, dateValue);
+                  }
+                }
+              }
+              
+              // Format: "YYYY" only - extract full year if available
+              if (!parsedSuccessfully) {
+                const yearOnlyMatch = value.match(/^\d{4}$/);
+                if (yearOnlyMatch) {
+                  dateValue = `${yearOnlyMatch[0]}-01-01`;
+                  parsedSuccessfully = true;
+                  console.log(`📅 Year-only format for "${propertyName}":`, dateValue);
+                }
+              }
+              
+              // ⚠️ ONLY FALL BACK TO JAN 1ST AS LAST RESORT
+              // And only if we found at least a 4-digit year in the string
+              if (!parsedSuccessfully) {
+                const yearMatch = value.match(/\d{4}/);
+                if (yearMatch) {
+                  console.log(`📅 FALLBACK: Date parsing failed for "${value}", using year ${yearMatch[0]} with January 1st`);
+                  dateValue = `${yearMatch[0]}-01-01`;
+                } else {
+                  // No year found at all, skip this date
+                  console.log(`📅 ERROR: No valid date or year found in "${value}", skipping date field`);
+                  return null;
+                }
+              }
+            }
           }
         }
+        
+        console.log(`📅 Final date value for "${propertyName}":`, dateValue);
+        
         return {
           date: {
             start: dateValue
@@ -550,14 +645,37 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
     isbn10: bookData.isbn10,
     description: bookData.description,
     categories: bookData.categories,
-    publishedDate: bookData.editionPublishedDate || bookData.publishedDate,
+    publishedDate: bookData.publishedDate,
     originalPublishedDate: bookData.originalPublishedDate,
     publisher: bookData.publisher,
     pageCount: bookData.pageCount,
     thumbnail: bookData.thumbnail,
     rating: bookData.averageRating,
     language: bookData.language,
-    ratingsCount: bookData.ratingsCount
+    ratingsCount: bookData.ratingsCount,
+    // Audiobook-specific fields
+    audiobookPublisher: bookData.audiobookData?.publisher,
+    audiobookChapters: bookData.audiobookData?.chapters || bookData.audiobookData?.chapterCount,
+    audiobookASIN: bookData.audiobookData?.asin,
+    audiobookNarrators: bookData.audiobookData?.narrators,
+    audiobookDuration: (() => {
+      // Format duration from totalDurationHours if available
+      if (bookData.audiobookData?.totalDurationHours) {
+        return bookData.audiobookData.totalDurationHours < 1 
+          ? `${Math.round(bookData.audiobookData.totalDurationHours * 60)} min`
+          : `${bookData.audiobookData.totalDurationHours.toFixed(1)} hrs`;
+      }
+      return bookData.audiobookData?.duration || null;
+    })(),
+    audiobookURL: bookData.audiobookData?.audibleUrl,
+    audiobookRating: (() => {
+      if (bookData.audiobookData?.rating) {
+        return bookData.audiobookData.ratingCount 
+          ? `${bookData.audiobookData.rating}/5 (${bookData.audiobookData.ratingCount} reviews)`
+          : `${bookData.audiobookData.rating}/5`;
+      }
+      return null;
+    })()
   };
 
   console.log('Book data received:', {
@@ -568,14 +686,50 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
     thumbnail: bookData.thumbnail
   });
 
+  // ⚠️ CRITICAL DEBUGGING: Trace exactly what date values we received
+  console.log('🔍 DEBUGGING: Complete book data received for date processing:', {
+    title: bookData.title,
+    fullBookData: {
+      publishedDate: bookData.publishedDate,
+      originalPublishedDate: bookData.originalPublishedDate,
+      editionPublishedDate: bookData.editionPublishedDate
+    },
+    dataTypes: {
+      publishedDate: typeof bookData.publishedDate,
+      originalPublishedDate: typeof bookData.originalPublishedDate,
+      editionPublishedDate: typeof bookData.editionPublishedDate
+    },
+    stringLengths: {
+      publishedDate: bookData.publishedDate ? String(bookData.publishedDate).length : 'null',
+      originalPublishedDate: bookData.originalPublishedDate ? String(bookData.originalPublishedDate).length : 'null',
+      editionPublishedDate: bookData.editionPublishedDate ? String(bookData.editionPublishedDate).length : 'null'
+    },
+    note: 'Frontend claims it has "Dec 31, 2022" but we may be receiving just "2023"'
+  });
+
   // Process each field mapping with priority handling
   // First pass: collect all mappings and identify conflicts
   const mappingPriority = {
-    originalPublishedDate: 1,
-    publishedDate: 2,
     isbn13: 1,
     isbn: 2,
     isbn10: 3
+  };
+
+  // Dynamic priority for date fields based on completeness
+  const getDatePriority = (bookField, value) => {
+    if (!value) return 999;
+    
+    // Check if it's a complete date (YYYY-MM-DD format or contains more than just year)
+    const isCompleteDate = typeof value === 'string' && 
+      (value.length > 4 || value.includes('-') || value.includes('/'));
+    
+    if (bookField === 'originalPublishedDate') {
+      return isCompleteDate ? 1 : 3; // Complete original date gets priority 1, year-only gets 3
+    } else if (bookField === 'publishedDate') {
+      return isCompleteDate ? 2 : 4; // Complete edition date gets priority 2, year-only gets 4
+    }
+    
+    return 999;
   };
 
   const propertyMappings = new Map();
@@ -594,8 +748,13 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
 
     // Check if this property is already mapped
     const existing = propertyMappings.get(notionPropertyName);
-    const currentPriority = mappingPriority[bookField] || 999;
-    const existingPriority = existing ? (mappingPriority[existing.bookField] || 999) : 999;
+    const currentPriority = bookField.includes('Date') ? 
+      getDatePriority(bookField, bookFieldMap[bookField]) : 
+      (mappingPriority[bookField] || 999);
+    const existingPriority = existing ? 
+      (existing.bookField.includes('Date') ? 
+        getDatePriority(existing.bookField, existing.value) : 
+        (mappingPriority[existing.bookField] || 999)) : 999;
 
     // Use higher priority mapping (lower number = higher priority)
     if (!existing || currentPriority < existingPriority) {
@@ -683,6 +842,58 @@ router.post('/pages/book', requireAuth, async (req, res) => {
     }
     
     res.status(500).json({ error: 'Failed to create book page' });
+  }
+});
+
+// Update an existing book page with formatted properties
+router.patch('/pages/:pageId/book', requireAuth, async (req, res) => {
+  try {
+    const { pageId } = req.params;
+    const { databaseId, bookData, fieldMappings } = req.body;
+    
+    if (!pageId || !databaseId || !bookData) {
+      return res.status(400).json({ error: 'Page ID, database ID and book data are required' });
+    }
+
+    const token = await getNotionToken(req);
+    
+    // Format book data with proper type checking (same as create)
+    const properties = await formatBookDataForNotion(bookData, fieldMappings, databaseId, token);
+    
+    console.log('Updating book page with data:', JSON.stringify({ pageId, properties }, null, 2));
+
+    const response = await notionRequest(token, 'PATCH', `/pages/${pageId}`, {
+      properties
+    });
+    
+    res.json({
+      id: response.id,
+      url: response.url,
+      last_edited_time: response.last_edited_time,
+      properties: response.properties,
+      bookData
+    });
+
+  } catch (error) {
+    console.error('Error updating book page:', error);
+    
+    if (error.response?.status === 400) {
+      console.error('Notion API validation error:', error.response.data);
+      return res.status(400).json({ 
+        error: 'Invalid book data or field mappings',
+        details: error.response.data
+      });
+    }
+    
+    if (error.response?.status === 404) {
+      return res.status(404).json({ error: 'Page not found or access denied' });
+    }
+    
+    if (error.response?.status === 401) {
+      return res.status(401).json({ error: 'Notion access token invalid or expired' });
+    }
+    
+    res.status(500).json({ error: 'Failed to update book page' });
   }
 });
 

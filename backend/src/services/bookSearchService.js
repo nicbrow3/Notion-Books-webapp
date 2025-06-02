@@ -227,7 +227,7 @@ class BookSearchService {
       isbn13: isbn13 || null,
       isbn10: isbn10 || null,
       pageCount: doc.number_of_pages_median || null,
-      categories: this.splitAndCleanCategories(doc.subject?.slice(0, 10) || []),
+      categories: this.splitAndCleanCategories(doc.subject?.slice(0, 10) || [], true),
       averageRating: null,
       ratingsCount: null,
       language: doc.language?.[0] || 'en',
@@ -348,8 +348,8 @@ class BookSearchService {
    */
   mergeDuplicateBooks(primaryBook, secondaryBook) {
     // Merge categories more intelligently
-    const primaryCategories = this.splitAndCleanCategories(primaryBook.categories || []);
-    const secondaryCategories = this.splitAndCleanCategories(secondaryBook.categories || []);
+    const primaryCategories = this.splitAndCleanCategories(primaryBook.categories || [], true); // Skip splitting initially
+    const secondaryCategories = this.splitAndCleanCategories(secondaryBook.categories || [], true); // Skip splitting initially
     
     // Merge and deduplicate categories
     const mergedCategories = [...new Set([
@@ -376,7 +376,7 @@ class BookSearchService {
         subjects: this.splitAndCleanCategories([
           ...(primaryBook.openLibraryData?.subjects || []),
           ...(secondaryBook.openLibraryData?.subjects || [])
-        ]),
+        ], true), // Skip splitting initially
         rawSubjects: [...new Set([
           ...(primaryBook.openLibraryData?.rawSubjects || []),
           ...(secondaryBook.openLibraryData?.rawSubjects || [])
@@ -401,8 +401,8 @@ class BookSearchService {
       
       if (openLibraryData && openLibraryData.first_publish_year) {
         // Merge categories from both sources
-        const googleCategories = this.splitAndCleanCategories(book.categories || []);
-        const openLibrarySubjects = this.splitAndCleanCategories(openLibraryData.subject?.slice(0, 12) || []);
+        const googleCategories = this.splitAndCleanCategories(book.categories || [], true); // Skip splitting initially
+        const openLibrarySubjects = this.splitAndCleanCategories(openLibraryData.subject?.slice(0, 12) || [], true); // Skip splitting initially
         
         // Merge and deduplicate categories
         const mergedCategories = [...new Set([
@@ -731,7 +731,7 @@ class BookSearchService {
 
     // Extract subjects/categories from edition if available
     const subjects = edition.subjects || [];
-    const categories = this.splitAndCleanCategories(subjects.slice(0, 15)); // Limit to 15 subjects and split them
+    const categories = this.splitAndCleanCategories(subjects.slice(0, 15), true); // Skip splitting initially
 
     return {
       id: edition.key,
@@ -760,9 +760,10 @@ class BookSearchService {
   /**
    * Split comma-separated categories and clean them up
    * @param {Array} categories - Array of category strings
+   * @param {boolean} skipSplitting - If true, skip splitting by & and "and", only clean
    * @returns {Array} Array of cleaned, split categories
    */
-  splitAndCleanCategories(categories) {
+  splitAndCleanCategories(categories, skipSplitting = false) {
     if (!categories || !Array.isArray(categories)) return [];
     
     const split = [];
@@ -770,39 +771,43 @@ class BookSearchService {
       if (typeof category === 'string') {
         let parts = [category];
         
-        // Split by comma first
-        if (category.includes(',')) {
-          parts = category.split(',');
-        }
-        
-        // Then split each part by ampersand and "and"
-        const finalParts = [];
-        parts.forEach(part => {
-          let subParts = [part];
-          
-          // Split by ampersand
-          if (part.includes('&')) {
-            subParts = part.split('&');
+        if (!skipSplitting) {
+          // Split by comma first
+          if (category.includes(',')) {
+            parts = category.split(',');
           }
           
-          // Then split each subpart by " and " (with spaces to avoid splitting words like "brand")
-          const andSplitParts = [];
-          subParts.forEach(subPart => {
-            if (subPart.toLowerCase().includes(' and ')) {
-              const andParts = subPart.split(/ and /i) // Case insensitive split
-                .map(p => p.trim())
-                .filter(p => p.length > 0);
-              andSplitParts.push(...andParts);
-            } else {
-              andSplitParts.push(subPart.trim());
+          // Then split each part by ampersand and "and"
+          const finalParts = [];
+          parts.forEach(part => {
+            let subParts = [part];
+            
+            // Split by ampersand
+            if (part.includes('&')) {
+              subParts = part.split('&');
             }
+            
+            // Then split each subpart by " and " (with spaces to avoid splitting words like "brand")
+            const andSplitParts = [];
+            subParts.forEach(subPart => {
+              if (subPart.toLowerCase().includes(' and ')) {
+                const andParts = subPart.split(/ and /i) // Case insensitive split
+                  .map(p => p.trim())
+                  .filter(p => p.length > 0);
+                andSplitParts.push(...andParts);
+              } else {
+                andSplitParts.push(subPart.trim());
+              }
+            });
+            
+            finalParts.push(...andSplitParts);
           });
           
-          finalParts.push(...andSplitParts);
-        });
+          parts = finalParts;
+        }
         
         // Clean and filter parts
-        const cleanedParts = finalParts
+        const cleanedParts = parts
           .map(part => part.trim())
           .filter(part => part.length > 0 && part.length < 50);
         

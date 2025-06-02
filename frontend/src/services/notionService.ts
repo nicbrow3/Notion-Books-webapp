@@ -149,6 +149,12 @@ export class NotionService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        
+        // Handle authentication errors specifically
+        if (response.status === 401) {
+          throw new Error('Authentication required. Please refresh the page and try again.');
+        }
+        
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
@@ -183,6 +189,43 @@ export class NotionService {
       return result;
     } catch (error) {
       console.error('Update page error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update an existing book page in Notion database
+   */
+  static async updateBookPage(pageId: string, request: CreateNotionPageRequest): Promise<NotionPage> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/notion/pages/${pageId}/book`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          databaseId: request.databaseId,
+          bookData: request.bookData,
+          fieldMappings: request.fieldMapping
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle authentication errors specifically
+        if (response.status === 401) {
+          throw new Error('Authentication required. Please refresh the page and try again.');
+        }
+        
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Update book page error:', error);
       throw error;
     }
   }

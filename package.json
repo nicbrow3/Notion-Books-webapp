@@ -2,6 +2,8 @@
   "name": "notion-books-webapp",
   "version": "1.0.0",
   "description": "A web application that fetches book information and creates Notion pages with user approval workflows",
+  "main": "electron.js",
+  "homepage": "./",
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -9,12 +11,69 @@
     "dev:frontend": "cd frontend && npm run dev",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "build": "cd frontend && npm run build",
-    "start": "cd backend && npm start"
+    "start": "cd backend && npm start",
+    "electron": "electron .",
+    "electron-dev": "ELECTRON_IS_DEV=true electron .",
+    "build:electron": "npm run build && electron-builder",
+    "dist": "npm run build && electron-builder --publish=never",
+    "pack": "npm run build && electron-builder --dir"
   },
-  "keywords": ["notion", "books", "api", "react", "express"],
+  "keywords": [
+    "notion",
+    "books",
+    "api",
+    "react",
+    "express",
+    "electron",
+    "desktop"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "electron": "^32.2.6",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.notionbooks.app",
+    "productName": "Notion Books",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron.js",
+      "config.json",
+      "frontend/build/**/*",
+      "backend/**/*",
+      "node_modules/**/*",
+      "!backend/node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "!node_modules"
+        ]
+      }
+    ]
   }
-} 
+}
