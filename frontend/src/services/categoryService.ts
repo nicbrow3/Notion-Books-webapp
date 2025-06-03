@@ -1,6 +1,7 @@
 export interface CategorySettings {
   ignoredCategories: string[];
   categoryMappings: { [key: string]: string }; // Maps similar categories to preferred names
+  fieldDefaults: { [fieldName: string]: 'audiobook' | 'original' | number }; // Default sources for each field
 }
 
 export class CategoryService {
@@ -63,7 +64,8 @@ export class CategoryService {
         const parsed = JSON.parse(stored);
         return {
           ignoredCategories: parsed.ignoredCategories || [],
-          categoryMappings: { ...this.DEFAULT_MAPPINGS, ...(parsed.categoryMappings || {}) }
+          categoryMappings: { ...this.DEFAULT_MAPPINGS, ...(parsed.categoryMappings || {}) },
+          fieldDefaults: parsed.fieldDefaults || {}
         };
       }
     } catch (error) {
@@ -72,7 +74,8 @@ export class CategoryService {
     
     return {
       ignoredCategories: [],
-      categoryMappings: { ...this.DEFAULT_MAPPINGS }
+      categoryMappings: { ...this.DEFAULT_MAPPINGS },
+      fieldDefaults: {}
     };
   }
 
@@ -91,7 +94,8 @@ export class CategoryService {
 
       const toSave = {
         ignoredCategories: settings.ignoredCategories,
-        categoryMappings: customMappings
+        categoryMappings: customMappings,
+        fieldDefaults: settings.fieldDefaults
       };
       
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave));
@@ -684,5 +688,31 @@ export class CategoryService {
     }
     
     return "Categories don't match any similarity patterns";
+  }
+
+  /**
+   * Set default source for a field
+   */
+  static setFieldDefault(fieldName: string, defaultSource: 'audiobook' | 'original' | number): void {
+    const settings = this.loadSettings();
+    settings.fieldDefaults[fieldName] = defaultSource;
+    this.saveSettings(settings);
+  }
+
+  /**
+   * Get default source for a field
+   */
+  static getFieldDefault(fieldName: string): 'audiobook' | 'original' | number | null {
+    const settings = this.loadSettings();
+    return settings.fieldDefaults[fieldName] || null;
+  }
+
+  /**
+   * Remove default source for a field
+   */
+  static removeFieldDefault(fieldName: string): void {
+    const settings = this.loadSettings();
+    delete settings.fieldDefaults[fieldName];
+    this.saveSettings(settings);
   }
 } 

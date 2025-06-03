@@ -13,6 +13,7 @@ import {
   DuplicateBookModal,
   SuccessModal
 } from './BookDetailsModal/index';
+import { FieldSelections } from './BookDetailsModal/BookInfoPanel';
 
 interface BookDetailsModalProps {
   isOpen: boolean;
@@ -75,6 +76,10 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   const [tempFieldMappings, setTempFieldMappings] = useState<any>(null);
   const [databaseProperties, setDatabaseProperties] = useState<any>(null);
   const [loadingDatabaseProperties, setLoadingDatabaseProperties] = useState(false);
+
+  // Field selections for combining data from different sources
+  const [fieldSelections, setFieldSelections] = useState<FieldSelections | null>(null);
+  const [selectedFieldData, setSelectedFieldData] = useState<any>(null);
 
   const preserveSelectionsRef = useRef<boolean>(false);
 
@@ -225,6 +230,95 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         // Remove duplicates while preserving order
         const uniqueCategories = Array.from(new Set(allCategories));
         setRawCategories(uniqueCategories);
+
+        // Enhancement: Fill in missing book information from editions and audiobook
+        const enhancedBook = { ...currentBook };
+        let hasEnhancements = false;
+
+        // Priority order: audiobook data > best edition > current book
+        // 1. Check if we should prefer audiobook data
+        if (currentBook.audiobookData?.hasAudiobook) {
+          // Use audiobook description if available and book lacks description
+          if (!enhancedBook.description && currentBook.audiobookData.description) {
+            enhancedBook.description = currentBook.audiobookData.description;
+            hasEnhancements = true;
+            console.log('📖 Enhanced book description from audiobook data');
+          }
+        }
+
+        // 2. Fill missing info from editions
+        if (!enhancedBook.description || !enhancedBook.publisher || !enhancedBook.pageCount) {
+          // Find the best edition with description
+          const editionWithDescription = result.data.editions.find(edition => 
+            edition.description && edition.description.trim().length > 50
+          );
+          
+          // Find the most complete edition (most fields filled)
+          const mostCompleteEdition = result.data.editions.reduce((best, current) => {
+            const currentScore = [
+              current.description,
+              current.publisher,
+              current.pageCount,
+              current.isbn13,
+              current.publishedDate
+            ].filter(Boolean).length;
+            
+            const bestScore = [
+              best?.description,
+              best?.publisher,
+              best?.pageCount,
+              best?.isbn13,
+              best?.publishedDate
+            ].filter(Boolean).length;
+            
+            return currentScore > bestScore ? current : best;
+          }, result.data.editions[0]);
+
+          // Apply enhancements from editions
+          if (!enhancedBook.description && editionWithDescription?.description) {
+            enhancedBook.description = editionWithDescription.description;
+            hasEnhancements = true;
+            console.log('📖 Enhanced book description from edition');
+          }
+
+          if (!enhancedBook.publisher && mostCompleteEdition?.publisher) {
+            enhancedBook.publisher = mostCompleteEdition.publisher;
+            hasEnhancements = true;
+            console.log('📖 Enhanced book publisher from edition');
+          }
+
+          if (!enhancedBook.pageCount && mostCompleteEdition?.pageCount) {
+            enhancedBook.pageCount = mostCompleteEdition.pageCount;
+            hasEnhancements = true;
+            console.log('📖 Enhanced book page count from edition');
+          }
+
+          // Update ISBN if not present
+          if (!enhancedBook.isbn13 && mostCompleteEdition?.isbn13) {
+            enhancedBook.isbn13 = mostCompleteEdition.isbn13;
+            hasEnhancements = true;
+            console.log('📖 Enhanced book ISBN-13 from edition');
+          }
+
+          if (!enhancedBook.isbn10 && mostCompleteEdition?.isbn10) {
+            enhancedBook.isbn10 = mostCompleteEdition.isbn10;
+            hasEnhancements = true;
+            console.log('📖 Enhanced book ISBN-10 from edition');
+          }
+
+          // Enhanced edition published date if available
+          if (!enhancedBook.publishedDate && mostCompleteEdition?.publishedDate) {
+            enhancedBook.publishedDate = mostCompleteEdition.publishedDate;
+            hasEnhancements = true;
+            console.log('📖 Enhanced book published date from edition');
+          }
+        }
+
+        // Update the current book if we made enhancements
+        if (hasEnhancements) {
+          setCurrentBook(enhancedBook);
+          console.log(`✨ Enhanced book data with information from ${result.data.editions.length} editions and audiobook data`);
+        }
       }
     } catch (error) {
       console.error('Error fetching editions:', error);
@@ -232,7 +326,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     } finally {
       setLoadingEditions(false);
     }
-  }, [currentBook.openLibraryKey, currentBook.categories, currentBook.audiobookData?.genres]);
+  }, [currentBook.openLibraryKey, currentBook.categories, currentBook.audiobookData?.genres, currentBook.audiobookData?.description, currentBook.audiobookData?.hasAudiobook]);
 
   // Load editions when modal opens
   useEffect(() => {
@@ -516,18 +610,18 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
 
       // Create book data with selected categories and all available dates
       const bookDataWithSelectedCategories = {
-        ...currentBook,
+        ...getFinalBookData(),
         categories: selectedCategories,
         // Keep all date fields available for backend to use based on field mappings
-        publishedDate: currentBook.publishedDate,
-        originalPublishedDate: currentBook.originalPublishedDate,
-        audiobookPublishedDate: currentBook.audiobookData?.publishedDate
+        publishedDate: getFinalBookData().publishedDate,
+        originalPublishedDate: getFinalBookData().originalPublishedDate,
+        audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
       };
 
       console.log('📅 Date processing for Notion:', {
-        originalDate: currentBook.originalPublishedDate,
-        editionDate: currentBook.publishedDate,
-        audiobookDate: currentBook.audiobookData?.publishedDate,
+        originalDate: getFinalBookData().originalPublishedDate,
+        editionDate: getFinalBookData().publishedDate,
+        audiobookDate: getFinalBookData().audiobookData?.publishedDate,
         bookDataForRequest: {
           publishedDate: bookDataWithSelectedCategories.publishedDate,
           originalPublishedDate: bookDataWithSelectedCategories.originalPublishedDate,
@@ -554,9 +648,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           audiobookPublishedDate: bookDataWithSelectedCategories.audiobookPublishedDate ? String(bookDataWithSelectedCategories.audiobookPublishedDate).length : 'null'
         },
         rawCurrentBookDates: {
-          originalPublishedDate: currentBook.originalPublishedDate,
-          publishedDate: currentBook.publishedDate,
-          audiobookPublishedDate: currentBook.audiobookData?.publishedDate
+          originalPublishedDate: getFinalBookData().originalPublishedDate,
+          publishedDate: getFinalBookData().publishedDate,
+          audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
         },
         note: 'If backend receives just "2023" but we show "Dec 31, 2022", the issue is in our data prep'
       });
@@ -574,11 +668,11 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         const actionType = duplicateAction === 'keep-both' ? 'added as separate entry' : 'added';
         
         // Simple toast notification
-        toast.success(`"${currentBook.title}" ${actionType} to Notion!`);
+        toast.success(`"${getFinalBookData().title}" ${actionType} to Notion!`);
         
         // Set up success modal data
         setSuccessModalData({
-          bookTitle: currentBook.title,
+          bookTitle: getFinalBookData().title,
           notionUrl: createdPage.url,
           categoriesCount: selectedCategories.length,
           dateType: 'multiple dates available',
@@ -624,12 +718,12 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
 
       // Create book data with selected categories and all available dates
       const bookDataWithSelectedCategories = {
-        ...currentBook,
+        ...getFinalBookData(),
         categories: selectedCategories,
         // Keep all date fields available for backend to use based on field mappings
-        publishedDate: currentBook.publishedDate,
-        originalPublishedDate: currentBook.originalPublishedDate,
-        audiobookPublishedDate: currentBook.audiobookData?.publishedDate
+        publishedDate: getFinalBookData().publishedDate,
+        originalPublishedDate: getFinalBookData().originalPublishedDate,
+        audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
       };
 
       // Extract page ID from URL (Notion URLs end with the page ID)
@@ -663,9 +757,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       });
 
       console.log('📅 Date processing for Notion (Replace):', {
-        originalDate: currentBook.originalPublishedDate,
-        editionDate: currentBook.publishedDate,
-        audiobookDate: currentBook.audiobookData?.publishedDate,
+        originalDate: getFinalBookData().originalPublishedDate,
+        editionDate: getFinalBookData().publishedDate,
+        audiobookDate: getFinalBookData().audiobookData?.publishedDate,
         bookDataForRequest: {
           publishedDate: bookDataWithSelectedCategories.publishedDate,
           originalPublishedDate: bookDataWithSelectedCategories.originalPublishedDate,
@@ -692,9 +786,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           audiobookPublishedDate: bookDataWithSelectedCategories.audiobookPublishedDate ? String(bookDataWithSelectedCategories.audiobookPublishedDate).length : 'null'
         },
         rawCurrentBookDates: {
-          originalPublishedDate: currentBook.originalPublishedDate,
-          publishedDate: currentBook.publishedDate,
-          audiobookPublishedDate: currentBook.audiobookData?.publishedDate
+          originalPublishedDate: getFinalBookData().originalPublishedDate,
+          publishedDate: getFinalBookData().publishedDate,
+          audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
         },
         note: 'REPLACE path - If backend receives just "2023" but we show "Dec 31, 2022", the issue is in our data prep'
       });
@@ -711,11 +805,11 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       const updatedPage = await NotionService.updateBookPage(pageId, request);
       
       // Simple toast notification
-      toast.success(`"${currentBook.title}" updated in Notion!`);
+      toast.success(`"${getFinalBookData().title}" updated in Notion!`);
       
       // Set up success modal data
       setSuccessModalData({
-        bookTitle: currentBook.title,
+        bookTitle: getFinalBookData().title,
         notionUrl: existingNotionPage.url,
         categoriesCount: selectedCategories.length,
         dateType: 'multiple dates available',
@@ -854,17 +948,17 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
 
       // Create book data with selected categories and all available dates
       const bookDataWithSelectedCategories = {
-        ...currentBook,
+        ...getFinalBookData(),
         categories: selectedCategories,
-        publishedDate: currentBook.publishedDate,
-        originalPublishedDate: currentBook.originalPublishedDate,
-        audiobookPublishedDate: currentBook.audiobookData?.publishedDate
+        publishedDate: getFinalBookData().publishedDate,
+        originalPublishedDate: getFinalBookData().originalPublishedDate,
+        audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
       };
 
       console.log('📅 Date processing for Notion (Keep Both):', {
-        originalDate: currentBook.originalPublishedDate,
-        editionDate: currentBook.publishedDate,
-        audiobookDate: currentBook.audiobookData?.publishedDate,
+        originalDate: getFinalBookData().originalPublishedDate,
+        editionDate: getFinalBookData().publishedDate,
+        audiobookDate: getFinalBookData().audiobookData?.publishedDate,
         bookDataForRequest: {
           publishedDate: bookDataWithSelectedCategories.publishedDate,
           originalPublishedDate: bookDataWithSelectedCategories.originalPublishedDate,
@@ -873,7 +967,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       });
 
       // ⚠️ CRITICAL DEBUGGING: Log exactly what we're sending to the backend (KEEP BOTH)
-      console.log('🔍 FRONTEND DEBUGGING (KEEP BOTH): Complete book data being sent to backend:', {
+      console.log('�� FRONTEND DEBUGGING (KEEP BOTH): Complete book data being sent to backend:', {
         title: bookDataWithSelectedCategories.title,
         whatWeSendToBackend: {
           publishedDate: bookDataWithSelectedCategories.publishedDate,
@@ -891,9 +985,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           audiobookPublishedDate: bookDataWithSelectedCategories.audiobookPublishedDate ? String(bookDataWithSelectedCategories.audiobookPublishedDate).length : 'null'
         },
         rawCurrentBookDates: {
-          originalPublishedDate: currentBook.originalPublishedDate,
-          publishedDate: currentBook.publishedDate,
-          audiobookPublishedDate: currentBook.audiobookData?.publishedDate
+          originalPublishedDate: getFinalBookData().originalPublishedDate,
+          publishedDate: getFinalBookData().publishedDate,
+          audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
         },
         note: 'KEEP BOTH path - If backend receives just "2023" but we show "Dec 31, 2022", the issue is in our data prep'
       });
@@ -909,11 +1003,11 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       
       if (createdPage) {
         // Simple toast notification
-        toast.success(`"${currentBook.title}" added to Notion!`);
+        toast.success(`"${getFinalBookData().title}" added to Notion!`);
         
         // Set up success modal data
         setSuccessModalData({
-          bookTitle: currentBook.title,
+          bookTitle: getFinalBookData().title,
           notionUrl: createdPage.url,
           categoriesCount: selectedCategories.length,
           dateType: 'multiple dates available',
@@ -931,6 +1025,54 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     } finally {
       setIsAddingToNotion(false);
     }
+  };
+
+  const handleSelectEdition = (edition: any) => {
+    // Merge data from selected edition into current book
+    const enhancedBook = {
+      ...currentBook,
+      // Use edition data when available, fallback to current book data
+      title: edition.title || currentBook.title,
+      subtitle: edition.subtitle || currentBook.subtitle,
+      authors: edition.authors?.length > 0 ? edition.authors : currentBook.authors,
+      publisher: edition.publisher || currentBook.publisher,
+      publishedDate: edition.publishedDate || currentBook.publishedDate,
+      isbn13: edition.isbn13 || currentBook.isbn13,
+      isbn10: edition.isbn10 || currentBook.isbn10,
+      pageCount: edition.pageCount || currentBook.pageCount,
+      description: edition.description || currentBook.description,
+      thumbnail: edition.thumbnail || currentBook.thumbnail,
+      language: edition.language || currentBook.language,
+      // Keep original book's other data
+      openLibraryKey: currentBook.openLibraryKey,
+      openLibraryData: currentBook.openLibraryData,
+      audiobookData: currentBook.audiobookData,
+      categories: currentBook.categories // Keep processed categories
+    };
+
+    setCurrentBook(enhancedBook);
+    toast.success(`Switched to edition: ${edition.title} (${edition.publishedDate || 'Unknown year'})`);
+  };
+
+  const handleFieldSelectionChange = (fieldSelections: FieldSelections, selectedData: any) => {
+    setFieldSelections(fieldSelections);
+    setSelectedFieldData(selectedData);
+    console.log('📝 Field selections updated:', { fieldSelections, selectedData });
+  };
+
+  // Get final book data with user's field selections applied
+  const getFinalBookData = () => {
+    if (!selectedFieldData) {
+      return currentBook;
+    }
+
+    return {
+      ...currentBook,
+      description: selectedFieldData.description || currentBook.description,
+      publisher: selectedFieldData.publisher || currentBook.publisher,
+      pageCount: selectedFieldData.pageCount || currentBook.pageCount,
+      // Add more fields as implemented
+    };
   };
 
   if (!isOpen) return null;
@@ -978,6 +1120,8 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
             loadingEditions={loadingEditions}
             loadingAudiobook={loadingAudiobook}
             onOpenAudiobookSearch={openAudiobookSearch}
+            onSelectEdition={handleSelectEdition}
+            onFieldSelectionChange={handleFieldSelectionChange}
           />
 
           {/* Right Panel - Categories Management */}
