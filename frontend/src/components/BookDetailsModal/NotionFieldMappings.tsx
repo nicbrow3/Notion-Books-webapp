@@ -84,14 +84,24 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
 
   return (
     <div className="border-t border-gray-200 pt-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="font-medium text-gray-900">Notion Field Mappings</h4>
+      <div 
+        className="flex items-center justify-between p-3 mb-4 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
+        onClick={() => onSetCollapsed(!isCollapsed)}
+        title={isCollapsed ? 'Expand field mappings' : 'Collapse field mappings'}
+      >
         <div className="flex items-center gap-2">
+          <h4 className="font-medium text-gray-900">Notion Field Mappings</h4>
+          <svg 
+            className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isCollapsed ? 'rotate-0' : 'rotate-90'}`} 
+            fill="currentColor" 
+            viewBox="0 0 20 20"
+          >
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+        </div>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {tempFieldMappings && (
             <>
-              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                Editable
-              </span>
               {(() => {
                 // Check if temp mappings differ from original settings
                 const hasChanges = onHasUnsavedChanges ? onHasUnsavedChanges() : false;
@@ -109,25 +119,25 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
           {tempFieldMappings && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && (
             <button
               onClick={onSaveTempFieldMappings}
-              className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 font-medium"
+              className="text-green-600 hover:text-green-800 hover:bg-green-50 p-1 rounded transition-colors"
+              title="Save field mapping changes"
             >
-              Save Changes
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l7-7a1 1 0 00-1.414-1.414L10 12.586l-2.293-2.293z"/>
+              </svg>
             </button>
           )}
           {tempFieldMappings && onResetTempFieldMappings && (
             <button
               onClick={onResetTempFieldMappings}
-              className="text-xs text-gray-600 hover:text-gray-800 underline"
+              className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-1 rounded transition-colors"
+              title="Reset field mappings to saved settings"
             >
-              Reset
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+              </svg>
             </button>
           )}
-          <button
-            onClick={() => onSetCollapsed(!isCollapsed)}
-            className="text-xs text-gray-600 hover:text-gray-800 underline"
-          >
-            {isCollapsed ? 'Expand' : 'Collapse'}
-          </button>
         </div>
       </div>
       

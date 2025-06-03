@@ -90,8 +90,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   };
 
   // Process categories whenever raw categories or settings change
-  const processCategories = useCallback((preserveSelections = false) => {
-    const result = CategoryService.processCategories(rawCategories, categorySettings, currentBook.audiobookData);
+  const processCategories = useCallback((preserveSelections = false, overrideSettings?: CategorySettings) => {
+    const settingsToUse = overrideSettings || categorySettings;
+    const result = CategoryService.processCategories(rawCategories, settingsToUse, currentBook.audiobookData);
     
     const processed: ProcessedCategory[] = [];
     
@@ -322,21 +323,36 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     setSelectedCategories(prev => prev.filter(cat => cat !== category.processed));
     
     CategoryService.addIgnoredCategory(category.original);
-    setCategorySettings(CategoryService.loadSettings());
+    const updatedSettings = CategoryService.loadSettings();
+    setCategorySettings(updatedSettings);
+    
+    // Immediately reprocess categories with the updated settings to show visual changes
+    processCategories(true, updatedSettings);
+    
     preserveSelectionsRef.current = true; // Preserve selections after ignoring
     toast.success(`"${category.original}" will always be ignored`);
   };
 
   const handleUnignoreCategory = (category: ProcessedCategory) => {
     CategoryService.removeIgnoredCategory(category.original);
-    setCategorySettings(CategoryService.loadSettings());
+    const updatedSettings = CategoryService.loadSettings();
+    setCategorySettings(updatedSettings);
+    
+    // Immediately reprocess categories with the updated settings to show visual changes
+    processCategories(true, updatedSettings);
+    
     preserveSelectionsRef.current = true; // Preserve selections after unignoring
     toast.success(`"${category.original}" is no longer ignored`);
   };
 
   const handleMergeCategories = (fromCategory: string, toCategory: string) => {
     CategoryService.addCategoryMapping(fromCategory, toCategory);
-    setCategorySettings(CategoryService.loadSettings());
+    const updatedSettings = CategoryService.loadSettings();
+    setCategorySettings(updatedSettings);
+    
+    // Immediately reprocess categories with the updated settings to show visual changes
+    processCategories(true, updatedSettings);
+    
     preserveSelectionsRef.current = true; // Preserve selections after mapping
     toast.success(`"${fromCategory}" will now map to "${toCategory}"`);
   };
@@ -359,7 +375,12 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     }
 
     CategoryService.addCategoryMapping(manualMappingFrom, manualMappingTo);
-    setCategorySettings(CategoryService.loadSettings());
+    const updatedSettings = CategoryService.loadSettings();
+    setCategorySettings(updatedSettings);
+    
+    // Immediately reprocess categories with the updated settings to show visual changes
+    processCategories(true, updatedSettings);
+    
     preserveSelectionsRef.current = true;
     setShowManualMappingModal(false);
     setManualMappingFrom('');
@@ -377,14 +398,24 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     if (category.mappedFrom) {
       // This category is the result of a mapping, remove the mapping
       CategoryService.removeCategoryMapping(category.mappedFrom);
-      setCategorySettings(CategoryService.loadSettings());
+      const updatedSettings = CategoryService.loadSettings();
+      setCategorySettings(updatedSettings);
+      
+      // Immediately reprocess categories with the updated settings to show visual changes
+      processCategories(true, updatedSettings);
+      
       preserveSelectionsRef.current = true; // Preserve selections after unmapping
       toast.success(`Removed mapping: "${category.mappedFrom}" → "${category.processed}"`);
     } else {
       // This category might be mapped to other categories, remove all mappings to it
       const removedMappings = CategoryService.removeAllMappingsTo(category.processed);
       if (removedMappings.length > 0) {
-        setCategorySettings(CategoryService.loadSettings());
+        const updatedSettings = CategoryService.loadSettings();
+        setCategorySettings(updatedSettings);
+        
+        // Immediately reprocess categories with the updated settings to show visual changes
+        processCategories(true, updatedSettings);
+        
         preserveSelectionsRef.current = true; // Preserve selections after unmapping
         toast.success(`Removed ${removedMappings.length} mapping(s) to "${category.processed}"`);
       } else {

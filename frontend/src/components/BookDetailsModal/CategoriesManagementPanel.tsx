@@ -91,26 +91,45 @@ const CategoriesManagementPanel: React.FC<CategoriesManagementPanelProps> = ({
   return (
     <div className="w-1/2 p-6 overflow-y-auto">
       <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="font-medium text-gray-900">Categories</h4>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onSetCategoriesSectionCollapsed(!isCategoriesSectionCollapsed)}
-              className="text-xs text-gray-600 hover:text-gray-800 underline"
+        <div 
+          className="flex items-center justify-between p-3 mb-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
+          onClick={() => onSetCategoriesSectionCollapsed(!isCategoriesSectionCollapsed)}
+          title={isCategoriesSectionCollapsed ? 'Expand categories' : 'Collapse categories'}
+        >
+          <div className="flex items-center gap-2">
+            <h4 className="font-medium text-gray-900">Categories / Genres</h4>
+            <svg 
+              className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isCategoriesSectionCollapsed ? 'rotate-0' : 'rotate-90'}`} 
+              fill="currentColor" 
+              viewBox="0 0 20 20"
             >
-              {isCategoriesSectionCollapsed ? 'Expand' : 'Collapse'}
+              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectAllCategories();
+              }}
+              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1 rounded transition-colors"
+              title="Select all categories"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
             </button>
             <button
-              onClick={onSelectAllCategories}
-              className="text-xs text-blue-600 hover:text-blue-800 underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeselectAllCategories();
+              }}
+              className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1 rounded transition-colors"
+              title="Deselect all categories"
             >
-              Select All
-            </button>
-            <button
-              onClick={onDeselectAllCategories}
-              className="text-xs text-red-600 hover:text-red-800 underline"
-            >
-              Deselect All
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
             </button>
           </div>
         </div>
