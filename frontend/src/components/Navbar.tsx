@@ -33,16 +33,6 @@ const Navbar: React.FC = () => {
             
             <div className="hidden md:flex items-center space-x-6">
               <Link
-                to="/search"
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive('/search')
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                🔍 Search Books
-              </Link>
-              <Link
                 to="/notion"
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive('/notion')
@@ -50,32 +40,18 @@ const Navbar: React.FC = () => {
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
-                📝 Notion Integration
+                Books
               </Link>
-              {isAuthenticated && (
-                <>
-                  <Link
-                    to="/dashboard"
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive('/dashboard')
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                    }`}
-                  >
-                    Dashboard
-                  </Link>
-                  <Link
-                    to="/settings"
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive('/settings')
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                    }`}
-                  >
-                    Settings
-                  </Link>
-                </>
-              )}
+              <Link
+                to="/settings"
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/settings')
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Settings
+              </Link>
             </div>
           </div>
           

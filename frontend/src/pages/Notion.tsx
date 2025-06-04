@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import { NotionService } from '../services/notionService';
-import { BookService } from '../services/bookService';
-import { NotionIntegrationSettings } from '../types/notion';
-import { BookSearchResult, SearchParams } from '../types/book';
+import { useSearch } from '../contexts/SearchContext';
+import { useNotionSettings } from '../contexts/NotionSettingsContext';
+import { SearchParams } from '../types/book';
 import SearchForm from '../components/SearchForm';
 import BookCardWithNotion from '../components/BookCardWithNotion';
 import NotionAuth from '../components/NotionAuth';
@@ -12,83 +11,14 @@ import NotionAuth from '../components/NotionAuth';
 const Notion: React.FC = () => {
   // Use auth context instead of local state
   const { isAuthenticated } = useAuth();
-  const [notionSettings, setNotionSettings] = useState<NotionIntegrationSettings | null>(null);
-
-  // Search state
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<any>(null);
-  const [selectedBook, setSelectedBook] = useState<BookSearchResult | null>(null);
-
-  // Prevent multiple simultaneous settings loads
-  const loadingSettingsRef = useRef(false);
-
-  // Load settings when authenticated
-  useEffect(() => {
-    console.log('📖 Notion page: isAuthenticated changed to:', isAuthenticated);
-    if (isAuthenticated) {
-      console.log('📖 Notion page: Loading settings...');
-      loadSettings();
-    } else {
-      console.log('📖 Notion page: Not authenticated, clearing state...');
-      setNotionSettings(null);
-      setSearchResults(null);
-      setSelectedBook(null);
-    }
-  }, [isAuthenticated]);
-
-  const loadSettings = async () => {
-    if (loadingSettingsRef.current) {
-      console.log('📖 Notion page: Settings loading already in progress, skipping...');
-      return;
-    }
-
-    try {
-      loadingSettingsRef.current = true;
-      console.log('📖 Notion page: 🔧 Loading settings...');
-      const settings = await NotionService.getSettings();
-      console.log('📖 Notion page: ✅ Settings loaded:', settings);
-      setNotionSettings(settings);
-    } catch (error) {
-      console.error('📖 Notion page: ❌ Failed to load settings:', error);
-      // Don't show error toast for missing settings - it's expected for new users
-    } finally {
-      loadingSettingsRef.current = false;
-    }
-  };
-
-  const handleSearch = async (params: SearchParams) => {
-    try {
-      setIsSearching(true);
-      setSearchResults(null);
-      setSelectedBook(null);
-      
-      const results = await BookService.searchBooks(params);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Search failed:', error);
-      toast.error('Failed to search books');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleBookSelect = (book: BookSearchResult) => {
-    setSelectedBook(book);
-    toast.success(`Selected: ${book.title}`);
-  };
+  // Use search context instead of local state
+  const { isSearching, searchResults, selectedBook, handleSearch, handleBookSelect } = useSearch();
+  // Use notion settings context
+  const { notionSettings } = useNotionSettings();
 
   const renderSearchSection = () => {
-
-    if (!notionSettings || !notionSettings.databaseId) {
-      return (
-        <div>
-        </div>
-      );
-    }
-
     return (
       <div className="space-y-6">
-
         {/* Search Form */}
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Search Books</h2>
@@ -120,7 +50,7 @@ const Notion: React.FC = () => {
 
             {searchResults.books && searchResults.books.length > 0 ? (
               <div className="space-y-4">
-                {searchResults.books.map((book: BookSearchResult) => (
+                {searchResults.books.map((book: any) => (
                   <BookCardWithNotion
                     key={book.id}
                     book={book}
@@ -149,7 +79,7 @@ const Notion: React.FC = () => {
             </pre>
             <div className="mt-4 flex gap-2">
               <button
-                onClick={() => setSelectedBook(null)}
+                onClick={() => handleBookSelect(null as any)}
                 className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
               >
                 Clear Selection
@@ -166,6 +96,48 @@ const Notion: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Quick Search Examples */}
+        {!searchResults && !isSearching && (
+          <div className="mt-8 bg-gray-50 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Try These Example Searches:
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <h4 className="font-medium text-gray-700">By Title:</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• "Harry Potter"</li>
+                  <li>• "The Great Gatsby"</li>
+                  <li>• "To Kill a Mockingbird"</li>
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-medium text-gray-700">By Author:</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• "J.K. Rowling"</li>
+                  <li>• "Stephen King"</li>
+                  <li>• "Agatha Christie"</li>
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-medium text-gray-700">By ISBN:</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• "9780439708180" (Harry Potter)</li>
+                  <li>• "9780061120084" (To Kill a Mockingbird)</li>
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-medium text-gray-700">General Search:</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• "science fiction"</li>
+                  <li>• "programming"</li>
+                  <li>• "cooking recipes"</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -174,9 +146,9 @@ const Notion: React.FC = () => {
     <div className="max-w-6xl mx-auto">
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Notion Integration</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Books</h1>
           <p className="text-gray-600">
-            Add books directly to your database.
+            Search for books and add them directly to your database.
           </p>
         </div>
         <div className="flex-shrink-0 ml-6">
