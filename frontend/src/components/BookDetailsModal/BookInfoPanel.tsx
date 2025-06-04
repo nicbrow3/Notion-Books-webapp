@@ -3,6 +3,7 @@ import { BookSearchResult } from '../../types/book';
 import AudiobookInfoSection from './AudiobookInfoSection';
 import FieldSourceTable from './FieldSourceTable';
 import { CategoryService } from '../../services/categoryService';
+import SourceBrowser from './SourceBrowser';
 
 export interface FieldSelections {
   description: 'audiobook' | 'original' | number; // number = edition index
@@ -18,6 +19,7 @@ interface BookInfoPanelProps {
   editions: any[];
   loadingEditions: boolean;
   loadingAudiobook: boolean;
+  notionSettings?: any; // Add notion settings for filtering preferences
   onOpenAudiobookSearch: () => void;
   onSelectEdition?: (edition: any) => void;
   onFieldSelectionChange?: (fieldSelections: FieldSelections, selectedData: any) => void;
@@ -28,6 +30,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
   editions,
   loadingEditions,
   loadingAudiobook,
+  notionSettings,
   onOpenAudiobookSearch,
   onSelectEdition,
   onFieldSelectionChange
@@ -92,8 +95,15 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       hasChanges = true;
     }
 
-    // Fallback to smart defaults if no saved preferences
-    if (!hasChanges) {
+    // Check if audiobook has the isEarlierDate flag set, which means we already determined
+    // the audiobook date is earlier than the book date during audiobook data loading
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.isEarlierDate && fieldSelections.publishedDate === 'original') {
+      console.log('Using audiobook date as default because it has isEarlierDate flag set');
+      newSelections.publishedDate = 'audiobook';
+      hasChanges = true;
+    }
+    // Fallback to smart defaults if no saved preferences and no isEarlierDate flag
+    else if (!hasChanges) {
       // Default to audiobook description if available and not already set to audiobook
       if (book.audiobookData?.hasAudiobook && book.audiobookData.description && fieldSelections.description === 'original') {
         newSelections.description = 'audiobook';
@@ -106,8 +116,45 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
         hasChanges = true;
       }
 
-      // Default to first published date if available and different from publishedDate
-      if (book.originalPublishedDate && book.publishedDate && book.originalPublishedDate !== book.publishedDate && fieldSelections.publishedDate === 'original') {
+      // Default to audiobook published date if it's earlier than book date (audiobooks never release before physical books)
+      if (book.audiobookData?.hasAudiobook && book.audiobookData.publishedDate && fieldSelections.publishedDate === 'original') {
+        const cleanedAudiobookDate = cleanAudiobookDate(book.audiobookData.publishedDate);
+        const audiobookDate = new Date(cleanedAudiobookDate);
+        
+        // If audiobook date is valid, compare with book dates
+        if (!isNaN(audiobookDate.getTime())) {
+          let shouldUseAudiobookDate = false;
+          
+          // Compare with book's published date
+          if (book.publishedDate) {
+            const bookDate = new Date(book.publishedDate);
+            if (!isNaN(bookDate.getTime()) && audiobookDate < bookDate) {
+              shouldUseAudiobookDate = true;
+            }
+          }
+          
+          // Compare with original published date if no book date match yet
+          if (!shouldUseAudiobookDate && book.originalPublishedDate) {
+            const originalDate = new Date(book.originalPublishedDate);
+            if (!isNaN(originalDate.getTime()) && audiobookDate < originalDate) {
+              shouldUseAudiobookDate = true;
+            }
+          }
+          
+          // If we only have audiobook date and no other dates, use it
+          if (!shouldUseAudiobookDate && !book.publishedDate && !book.originalPublishedDate) {
+            shouldUseAudiobookDate = true;
+          }
+          
+          if (shouldUseAudiobookDate) {
+            newSelections.publishedDate = 'audiobook';
+            hasChanges = true;
+          }
+        }
+      }
+
+      // Default to first published date if available and different from publishedDate (and no audiobook override)
+      if (!hasChanges && book.originalPublishedDate && book.publishedDate && book.originalPublishedDate !== book.publishedDate && fieldSelections.publishedDate === 'original') {
         newSelections.publishedDate = 'first_published';
         hasChanges = true;
       }
@@ -116,7 +163,23 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     if (hasChanges) {
       setFieldSelections(newSelections);
     }
-  }, [book.audiobookData, editions.length]);
+  }, [book.audiobookData, editions.length, notionSettings?.useEnglishOnlySources]);
+
+  // Helper function to check if a source is English
+  const isEnglishSource = (edition: any) => {
+    if (!edition?.language) return true; // Assume English if no language specified
+    const lang = edition.language.toLowerCase();
+    return lang === 'en' || lang === 'eng' || lang === 'english' || lang.startsWith('en');
+  };
+
+  // Helper function to filter editions by language if needed
+  const getFilteredEditions = () => {
+    // Default to true (English-only) unless explicitly set to false
+    if (notionSettings && notionSettings.useEnglishOnlySources === false) {
+      return editions; // No filtering if setting is explicitly disabled
+    }
+    return editions.filter(isEnglishSource);
+  };
 
   // Get available description sources
   const getDescriptionSources = () => {
@@ -141,11 +204,13 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
 
     // Edition descriptions
-    editions.forEach((edition, index) => {
+    getFilteredEditions().forEach((edition, index) => {
       if (edition.description) {
+        // Find the original index in the unfiltered editions array
+        const originalIndex = editions.findIndex(e => e.id === edition.id);
         sources.push({
-          value: index,
-          label: createEditionLabel(edition, index),
+          value: originalIndex !== -1 ? originalIndex : index,
+          label: createEditionLabel(edition, originalIndex !== -1 ? originalIndex : index),
           content: edition.description
         });
       }
@@ -191,11 +256,13 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
 
     // Edition publishers
-    editions.forEach((edition, index) => {
+    getFilteredEditions().forEach((edition, index) => {
       if (edition.publisher) {
+        // Find the original index in the unfiltered editions array
+        const originalIndex = editions.findIndex(e => e.id === edition.id);
         sources.push({
-          value: index,
-          label: createEditionLabel(edition, index),
+          value: originalIndex !== -1 ? originalIndex : index,
+          label: createEditionLabel(edition, originalIndex !== -1 ? originalIndex : index),
           content: edition.publisher
         });
       }
@@ -218,11 +285,13 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
 
     // Edition page counts
-    editions.forEach((edition, index) => {
+    getFilteredEditions().forEach((edition, index) => {
       if (edition.pageCount) {
+        // Find the original index in the unfiltered editions array
+        const originalIndex = editions.findIndex(e => e.id === edition.id);
         sources.push({
-          value: index,
-          label: createEditionLabel(edition, index),
+          value: originalIndex !== -1 ? originalIndex : index,
+          label: createEditionLabel(edition, originalIndex !== -1 ? originalIndex : index),
           content: edition.pageCount
         });
       }
@@ -325,11 +394,13 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
 
     // Edition published dates
-    editions.forEach((edition, index) => {
+    getFilteredEditions().forEach((edition, index) => {
       if (edition.publishedDate) {
+        // Find the original index in the unfiltered editions array
+        const originalIndex = editions.findIndex(e => e.id === edition.id);
         potentialSources.push({
-          value: index as number,
-          label: createEditionLabel(edition, index),
+          value: originalIndex !== -1 ? originalIndex : index,
+          label: createEditionLabel(edition, originalIndex !== -1 ? originalIndex : index),
           content: edition.publishedDate,
           isYearOnly: isYearOnlyDate(edition.publishedDate)
         });
@@ -493,66 +564,16 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
             by {formatAuthors(book.authors)}
           </p>
 
-          {/* Source Indicator */}
+          {/* Replace source indicator and editions info with SourceBrowser */}
           <div className="mb-3">
-            <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
-              {book.source === 'merged_apis' ? 'Sources: Google Books + Open Library' :
-               book.source === 'open_library_primary' ? 'Source: Open Library' :
-               book.source === 'google_books_enhanced' ? 'Source: Google Books (Enhanced)' :
-               book.source === 'open_library_edition' ? 'Source: Open Library Edition' :
-               `Source: ${book.source}`}
-            </span>
+            <SourceBrowser
+              book={book}
+              editions={editions}
+              isFiltering={notionSettings?.useEnglishOnlySources !== false && getFilteredEditions().length !== editions.length}
+              filteredEditions={getFilteredEditions()}
+              loadingEditions={loadingEditions}
+            />
           </div>
-
-          {/* Editions Info */}
-          {book.openLibraryData?.editionCount && book.openLibraryData.editionCount > 1 && (
-            <div className="mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-blue-600 font-medium">
-                  {book.openLibraryData.editionCount} editions available
-                </span>
-                {loadingEditions && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                )}
-              </div>
-              {editions.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-2">
-                    Data enhanced from {editions.length} editions
-                  </p>
-                  {onSelectEdition && (
-                    <div className="flex flex-col gap-2">
-                      <button
-                        onClick={() => {
-                          // For now, show a list of editions. Later this could open a modal
-                          const editionsList = editions.map((edition, index) => 
-                            `${index + 1}. ${edition.title} (${edition.publishedDate || 'Unknown year'})${edition.description ? ' - Has description' : ''}`
-                          ).join('\n');
-                          alert(`Available editions:\n\n${editionsList}\n\nEdition selection UI coming soon!`);
-                        }}
-                        className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition-colors w-fit"
-                      >
-                        📚 Browse Editions
-                      </button>
-                      
-                      {/* Show best edition info */}
-                      {(() => {
-                        const bestEdition = editions.find(e => e.description) || editions[0];
-                        if (bestEdition && bestEdition.description) {
-                          return (
-                            <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                              ✨ Using data from: {bestEdition.title} ({bestEdition.publishedDate || 'Unknown year'})
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
@@ -670,15 +691,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
           <div>
             <span className="font-medium text-gray-900">ISBN-10:</span>
             <p className="text-gray-600 font-mono text-xs">{book.isbn10}</p>
-          </div>
-        )}
-        {book.averageRating && (
-          <div>
-            <span className="font-medium text-gray-900">Rating:</span>
-            <p className="text-gray-600">
-              {book.averageRating.toFixed(1)}/5
-              {book.ratingsCount && ` (${book.ratingsCount} reviews)`}
-            </p>
           </div>
         )}
       </div>

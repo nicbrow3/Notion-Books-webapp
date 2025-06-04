@@ -35,6 +35,32 @@ const FieldSourceTable = <T extends string | number>({
     return saved as T | null;
   });
 
+  // Determine if this is a description field that needs wider layout
+  const isDescriptionField = fieldName.toLowerCase().includes('description');
+  
+  // Calculate dynamic widths and layout based on field type
+  const getLayoutConfig = () => {
+    if (isDescriptionField) {
+      return {
+        containerMinWidth: 'min-w-[600px]',
+        containerMaxWidth: 'max-w-4xl',
+        defaultColumnWidth: 'w-20',
+        sourceColumnWidth: 'w-48',
+        tableLayout: 'table-fixed' as const
+      };
+    } else {
+      return {
+        containerMinWidth: 'min-w-[400px]',
+        containerMaxWidth: 'max-w-2xl',
+        defaultColumnWidth: 'w-16',
+        sourceColumnWidth: 'w-32',
+        tableLayout: 'table-auto' as const
+      };
+    }
+  };
+
+  const layoutConfig = getLayoutConfig();
+
   // Handle click outside to close the table
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -93,7 +119,7 @@ const FieldSourceTable = <T extends string | number>({
 
       {isOpen && (
         <div 
-          className="fixed bg-white border border-gray-300 rounded-md shadow-xl z-[99999] min-w-[600px] max-w-4xl transform transition-all duration-200 ease-out scale-100 opacity-100"
+          className={`fixed bg-white border border-gray-300 rounded-md shadow-xl z-[99999] ${layoutConfig.containerMinWidth} ${layoutConfig.containerMaxWidth} transform transition-all duration-200 ease-out scale-100 opacity-100`}
           style={{
             top: containerRef.current ? containerRef.current.getBoundingClientRect().bottom + window.scrollY + 4 : 0,
             left: containerRef.current ? containerRef.current.getBoundingClientRect().left + window.scrollX : 0,
@@ -106,12 +132,12 @@ const FieldSourceTable = <T extends string | number>({
           </div>
           
           <div className="max-h-80 overflow-y-auto">
-            <table className="w-full text-sm">
+            <table className={`w-full text-sm ${layoutConfig.tableLayout}`}>
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                 <tr>
-                  <th className="text-left p-3 font-medium text-gray-700 w-20">Default</th>
-                  <th className="text-left p-3 font-medium text-gray-700 w-48">Source</th>
-                  <th className={`text-left p-3 font-medium text-gray-700 ${fieldName === 'Pages' ? 'w-24' : ''}`}>{fieldName}</th>
+                  <th className={`text-left p-3 font-medium text-gray-700 ${layoutConfig.defaultColumnWidth}`}>Default</th>
+                  <th className={`text-left p-3 font-medium text-gray-700 ${layoutConfig.sourceColumnWidth}`}>Source</th>
+                  <th className="text-left p-3 font-medium text-gray-700">{fieldName}</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,13 +148,13 @@ const FieldSourceTable = <T extends string | number>({
                     <tr
                       key={index}
                       onClick={(e) => handleRowClick(source, e)}
-                      className={`transition-all duration-150 border-b border-gray-100 last:border-b-0 cursor-pointer h-16 ${
+                      className={`transition-all duration-150 border-b border-gray-100 last:border-b-0 cursor-pointer ${
                         isSelected 
                           ? 'bg-blue-100 ring-1 ring-blue-300' 
                           : 'hover:bg-gray-50'
                       }`}
                     >
-                      <td className="p-3 text-center border-r border-gray-200 w-20">
+                      <td className={`p-3 text-center border-r border-gray-200 ${layoutConfig.defaultColumnWidth}`}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -148,7 +174,7 @@ const FieldSourceTable = <T extends string | number>({
                           )}
                         </button>
                       </td>
-                      <td className="p-3 font-medium text-gray-800 border-r border-gray-200 w-48">
+                      <td className={`p-3 font-medium text-gray-800 border-r border-gray-200 ${layoutConfig.sourceColumnWidth}`}>
                         <div className="flex items-center gap-2">
                           {source.label}
                           {isDefault && (
@@ -158,27 +184,31 @@ const FieldSourceTable = <T extends string | number>({
                           )}
                         </div>
                       </td>
-                      <td className={`p-3 text-gray-700 ${fieldName === 'Pages' ? 'w-24' : ''}`}>
-                        <div className="flex items-center min-h-[2rem]">
-                          {typeof source.content === 'string' ? (
-                            source.content.length > 200 ? (
-                              <div className="w-full">
-                                <p className="truncate text-sm leading-relaxed" title={source.content}>
+                      <td className="p-3 text-gray-700">
+                        {isDescriptionField ? (
+                          <div className="flex items-start min-h-[4rem]">
+                            {typeof source.content === 'string' ? (
+                              <div className="w-full overflow-hidden">
+                                <p className="text-sm leading-relaxed line-clamp-3 break-words">
                                   {source.content}
                                 </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {source.content.length} characters
-                                </p>
+                                {source.content.length > 150 && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {source.content.length} characters
+                                  </p>
+                                )}
                               </div>
                             ) : (
-                              <p className="text-sm leading-relaxed">
-                                {source.content}
-                              </p>
-                            )
-                          ) : (
-                            <p className="text-sm font-medium">{source.content}</p>
-                          )}
-                        </div>
+                              <p className="text-sm font-medium">{source.content}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center min-h-[2.5rem]">
+                            <p className="text-sm font-medium break-words">
+                              {source.content}
+                            </p>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

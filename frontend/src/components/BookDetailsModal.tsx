@@ -195,7 +195,33 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
 
     setLoadingEditions(true);
     try {
-      const response = await fetch(`/api/books/editions/${currentBook.openLibraryKey.replace('/works/', '')}`);
+      const cleanWorkKey = currentBook.openLibraryKey.replace('/works/', '');
+      
+      // Default to true if notionSettings exists but useEnglishOnlySources is undefined
+      // This ensures we honor the default setting from the Settings page
+      let englishOnly = true; // Default to true
+      
+      // Only set to false if explicitly set to false
+      if (notionSettings && notionSettings.useEnglishOnlySources === false) {
+        englishOnly = false;
+      }
+      
+      let url = `/api/books/editions/${cleanWorkKey}`;
+      const queryParams = new URLSearchParams();
+      if (englishOnly) {
+        queryParams.append('englishOnly', 'true');
+        if (currentBook.title) {
+          queryParams.append('originalTitle', encodeURIComponent(currentBook.title));
+        }
+      }
+      const queryString = queryParams.toString();
+      if (queryString) {
+        url += `?${queryString}`;
+      }
+      
+      // Remove detailed debug log and use a simpler one
+      console.log(`Fetching ${englishOnly ? 'English-only' : 'all'} editions for "${currentBook.title}"`);
+      const response = await fetch(url);
       const result: BookEditionsResponse = await response.json();
       
       if (result.success && result.data) {
@@ -242,7 +268,6 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           if (!enhancedBook.description && currentBook.audiobookData.description) {
             enhancedBook.description = currentBook.audiobookData.description;
             hasEnhancements = true;
-            console.log('📖 Enhanced book description from audiobook data');
           }
         }
 
@@ -278,46 +303,40 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           if (!enhancedBook.description && editionWithDescription?.description) {
             enhancedBook.description = editionWithDescription.description;
             hasEnhancements = true;
-            console.log('📖 Enhanced book description from edition');
           }
 
           if (!enhancedBook.publisher && mostCompleteEdition?.publisher) {
             enhancedBook.publisher = mostCompleteEdition.publisher;
             hasEnhancements = true;
-            console.log('📖 Enhanced book publisher from edition');
           }
 
           if (!enhancedBook.pageCount && mostCompleteEdition?.pageCount) {
             enhancedBook.pageCount = mostCompleteEdition.pageCount;
             hasEnhancements = true;
-            console.log('📖 Enhanced book page count from edition');
           }
 
           // Update ISBN if not present
           if (!enhancedBook.isbn13 && mostCompleteEdition?.isbn13) {
             enhancedBook.isbn13 = mostCompleteEdition.isbn13;
             hasEnhancements = true;
-            console.log('📖 Enhanced book ISBN-13 from edition');
           }
 
           if (!enhancedBook.isbn10 && mostCompleteEdition?.isbn10) {
             enhancedBook.isbn10 = mostCompleteEdition.isbn10;
             hasEnhancements = true;
-            console.log('📖 Enhanced book ISBN-10 from edition');
           }
 
           // Enhanced edition published date if available
           if (!enhancedBook.publishedDate && mostCompleteEdition?.publishedDate) {
             enhancedBook.publishedDate = mostCompleteEdition.publishedDate;
             hasEnhancements = true;
-            console.log('📖 Enhanced book published date from edition');
           }
         }
 
         // Update the current book if we made enhancements
         if (hasEnhancements) {
           setCurrentBook(enhancedBook);
-          console.log(`✨ Enhanced book data with information from ${result.data.editions.length} editions and audiobook data`);
+          console.log(`Enhanced book data with information from ${result.data.editions.length} editions and audiobook data`);
         }
       }
     } catch (error) {
@@ -326,24 +345,71 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     } finally {
       setLoadingEditions(false);
     }
-  }, [currentBook.openLibraryKey, currentBook.categories, currentBook.audiobookData?.genres, currentBook.audiobookData?.description, currentBook.audiobookData?.hasAudiobook]);
+  }, [currentBook.openLibraryKey, currentBook.title, currentBook.categories, currentBook.audiobookData?.genres, currentBook.audiobookData?.description, currentBook.audiobookData?.hasAudiobook, notionSettings?.useEnglishOnlySources]);
 
   // Load editions when modal opens
   useEffect(() => {
     if (isOpen && currentBook.openLibraryKey) {
-      fetchAllEditionsCategories();
+      // Only fetch when notionSettings is definitely loaded (not undefined)
+      if (typeof notionSettings !== 'undefined') {
+        fetchAllEditionsCategories();
+      }
     }
-  }, [isOpen, currentBook.openLibraryKey, fetchAllEditionsCategories]);
+  }, [isOpen, currentBook.openLibraryKey, fetchAllEditionsCategories, notionSettings]);
 
   // Fetch audiobook data when modal opens (only if not already loaded)
   const fetchAudiobookData = useCallback(async () => {
     setLoadingAudiobook(true);
     try {
       const bookWithAudiobook = await BookService.getAudiobookData(currentBook);
+      
+      // Check if we need to use audiobook date
+      if (bookWithAudiobook.audiobookData?.hasAudiobook && bookWithAudiobook.audiobookData.publishedDate) {
+        // Clean the audiobook date
+        const cleanAudiobookDate = (dateString: string) => {
+          return dateString.replace(/T00:00:00\.000Z$/, '');
+        };
+        
+        const cleanedAudiobookDate = cleanAudiobookDate(bookWithAudiobook.audiobookData.publishedDate);
+        const audiobookDate = new Date(cleanedAudiobookDate);
+        
+        // If audiobook date is valid, compare with book dates
+        if (!isNaN(audiobookDate.getTime())) {
+          let shouldUseAudiobookDate = false;
+          
+          // Compare with book's published date
+          if (bookWithAudiobook.publishedDate) {
+            const bookDate = new Date(bookWithAudiobook.publishedDate);
+            if (!isNaN(bookDate.getTime()) && audiobookDate < bookDate) {
+              shouldUseAudiobookDate = true;
+            }
+          }
+          
+          // Compare with original published date if no book date match yet
+          if (!shouldUseAudiobookDate && bookWithAudiobook.originalPublishedDate) {
+            const originalDate = new Date(bookWithAudiobook.originalPublishedDate);
+            if (!isNaN(originalDate.getTime()) && audiobookDate < originalDate) {
+              shouldUseAudiobookDate = true;
+            }
+          }
+          
+          // If we only have audiobook date and no other dates, use it
+          if (!shouldUseAudiobookDate && !bookWithAudiobook.publishedDate && !bookWithAudiobook.originalPublishedDate) {
+            shouldUseAudiobookDate = true;
+          }
+          
+          // Set a flag in the audiobook data to indicate the date should be used as default
+          if (shouldUseAudiobookDate) {
+            bookWithAudiobook.audiobookData.isEarlierDate = true;
+            console.log(`Audiobook date (${cleanedAudiobookDate}) is earlier than other dates - marking as preferred date`);
+          }
+        }
+      }
+      
       setCurrentBook(bookWithAudiobook);
       // Only log if audiobook data was actually found
       if (bookWithAudiobook.audiobookData?.hasAudiobook) {
-        console.log(`🎧 Audiobook data loaded for: "${currentBook.title}"`);
+        console.log(`Audiobook data loaded for: "${currentBook.title}"`);
       }
     } catch (error) {
       console.error('❌ Failed to fetch audiobook data:', error);
@@ -359,7 +425,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     } finally {
       setLoadingAudiobook(false);
     }
-  }, [currentBook.title, currentBook.authors]); // Only depend on title and authors, not the whole book object
+  }, [currentBook.title, currentBook.authors]); // Remove fieldSelections dependency
 
   useEffect(() => {
     if (isOpen && !currentBook.audiobookData && !loadingAudiobook) {
@@ -377,7 +443,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     if (currentBook.audiobookData && rawCategories.length > 0 && !hasProcessedAudiobookRef.current) {
       // Only log if audiobook has genres that might affect category processing
       if (currentBook.audiobookData.hasAudiobook && currentBook.audiobookData.genres && currentBook.audiobookData.genres.length > 0) {
-        console.log(`🎧 Reprocessing categories with ${currentBook.audiobookData.genres.length} audiobook genres`);
+        console.log(`Reprocessing categories with ${currentBook.audiobookData.genres.length} audiobook genres`);
       }
       processCategories(preserveSelectionsRef.current);
       hasProcessedAudiobookRef.current = true;
@@ -522,7 +588,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   };
 
   const handleAudiobookSelected = (audiobookData: any) => {
-    console.log(`🎧 User selected audiobook: "${audiobookData.title}"`);
+    console.log(`User selected audiobook: "${audiobookData.title}"`);
     setCurrentBook(prev => ({
       ...prev,
       audiobookData: audiobookData
@@ -750,9 +816,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       // This ensures we only update book-related fields and preserve any custom properties
       const selectiveFieldMapping = tempFieldMappings || notionSettings.fieldMapping;
       
-      console.log('🔄 Updating existing page with selective field mapping:', {
+      console.log('Updating existing page with selective field mapping:', {
         pageId,
-        mappedFields: Object.keys(selectiveFieldMapping),
+        mappedFields: Object.keys(selectiveFieldMapping).length,
         bookTitle: currentBook.title
       });
 
@@ -832,7 +898,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     if (!isOpen) return;
     
     if (isNotionConnected && notionSettings?.fieldMapping && !tempFieldMappings) {
-      console.log('🔧 BookDetailsModal: Initializing field mappings and loading database properties');
+      console.log('Initializing field mappings');
       setTempFieldMappings({ ...notionSettings.fieldMapping });
       
       // Load database properties if not already loaded
@@ -840,7 +906,6 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         setLoadingDatabaseProperties(true);
         NotionService.getDatabaseProperties(notionSettings.databaseId)
           .then(properties => {
-            console.log('🔧 Database properties loaded successfully');
             setDatabaseProperties(properties);
           })
           .catch(error => {
@@ -967,7 +1032,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       });
 
       // ⚠️ CRITICAL DEBUGGING: Log exactly what we're sending to the backend (KEEP BOTH)
-      console.log('�� FRONTEND DEBUGGING (KEEP BOTH): Complete book data being sent to backend:', {
+      console.log('🔍 FRONTEND DEBUGGING (KEEP BOTH): Complete book data being sent to backend:', {
         title: bookDataWithSelectedCategories.title,
         whatWeSendToBackend: {
           publishedDate: bookDataWithSelectedCategories.publishedDate,
@@ -1057,7 +1122,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   const handleFieldSelectionChange = (fieldSelections: FieldSelections, selectedData: any) => {
     setFieldSelections(fieldSelections);
     setSelectedFieldData(selectedData);
-    console.log('📝 Field selections updated:', { fieldSelections, selectedData });
+    console.log('Field selections updated');
   };
 
   // Get final book data with user's field selections applied
@@ -1074,6 +1139,29 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       // Add more fields as implemented
     };
   };
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Save the current scroll position
+      const scrollY = window.scrollY;
+      
+      // Add styles to prevent scrolling
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      
+      return () => {
+        // Remove styles and restore scroll position when modal closes
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -1119,6 +1207,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
             editions={editions}
             loadingEditions={loadingEditions}
             loadingAudiobook={loadingAudiobook}
+            notionSettings={notionSettings}
             onOpenAudiobookSearch={openAudiobookSearch}
             onSelectEdition={handleSelectEdition}
             onFieldSelectionChange={handleFieldSelectionChange}

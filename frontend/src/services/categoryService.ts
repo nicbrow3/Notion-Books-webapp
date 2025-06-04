@@ -221,46 +221,13 @@ export class CategoryService {
     // Determine which splitting function to use based on audiobook data availability
     let splitCategories: string[];
     
-    if (audiobookData?.genres && Array.isArray(audiobookData.genres) && audiobookData.genres.length > 0) {
-      // We have audiobook data with actual genres, use audiobook-aware splitting
-      const rawAudiobookGenres = audiobookData.genres.map((genre: any) => 
-        typeof genre === 'string' ? genre : genre?.name || ''
-      ).filter((name: string) => name.length > 0);
-      
-      // Split compound audiobook genres first (they might contain & or "and")
-      const splitAudiobookGenres: string[] = [];
-      rawAudiobookGenres.forEach((genre: string) => {
-        let parts = [genre];
+    if (audiobookData?.hasAudiobook && audiobookData.genres && audiobookData.genres.length > 0) {
+      const cleanAudiobookGenres = audiobookData.genres
+        .map((genre: any) => typeof genre === 'string' ? genre : (genre as any)?.name)
+        .filter(Boolean) as string[];
         
-        // Split by ampersand
-        if (genre.includes('&')) {
-          parts = genre.split('&');
-        }
-        
-        // Then split each part by " and " (with spaces to avoid splitting words like "brand")
-        const finalParts: string[] = [];
-        parts.forEach((part: string) => {
-          if (part.toLowerCase().includes(' and ')) {
-            const andParts = part.split(/ and /i)
-              .map((p: string) => p.trim())
-              .filter((p: string) => p.length > 0);
-            finalParts.push(...andParts);
-          } else {
-            finalParts.push(part.trim());
-          }
-        });
-        
-        splitAudiobookGenres.push(...finalParts);
-      });
-      
-      // Remove duplicates and filter clean split audiobook genres
-      const cleanAudiobookGenres = Array.from(new Set(splitAudiobookGenres))
-        .map(genre => genre.trim())
-        .filter(genre => genre.length > 0);
-      
-      // Only log if there are actually audiobook genres to preserve
       if (cleanAudiobookGenres.length > 0) {
-        console.log(`🎧 Processing categories with audiobook genre preservation (${cleanAudiobookGenres.length} genres)`);
+        console.log(`Processing categories with audiobook genre preservation (${cleanAudiobookGenres.length} genres)`);
       }
       splitCategories = this.splitCategoriesWithAudiobookPreservation(categories, cleanAudiobookGenres);
     } else if (audiobookData && 

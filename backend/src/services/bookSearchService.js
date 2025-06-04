@@ -633,54 +633,107 @@ class BookSearchService {
    * Get different editions of a book from Open Library
    * @param {string} openLibraryKey - Open Library work key (e.g., "/works/OL123456W")
    * @param {number} limit - Maximum number of editions to return
+   * @param {boolean} englishOnly - Filter to English-only editions
+   * @param {string} originalTitle - Original title of the book
    * @returns {Promise<Object>} Different editions of the book
    */
-  async getBookEditions(openLibraryKey, limit = 20) {
+  async getBookEditions(openLibraryKey, limit = 20, englishOnly = false, originalTitle = '') {
     try {
       if (!openLibraryKey) {
         throw new Error('Open Library key is required');
       }
 
-      // Clean the key to ensure it's in the right format
       const workKey = openLibraryKey.startsWith('/works/') ? openLibraryKey : `/works/${openLibraryKey}`;
       
-      console.log(`📚 Fetching editions for Open Library work: ${workKey}`);
+      let logMessage = `📚 Fetching editions for Open Library work: ${workKey}`;
+      if (englishOnly) logMessage += ` (English-only, original title: "${originalTitle}")`;
+      console.log(logMessage);
 
-      // Get editions from Open Library
-      const editionsUrl = `https://openlibrary.org${workKey}/editions.json`;
-      const response = await axios.get(editionsUrl, {
-        params: {
-          limit: limit,
-          offset: 0
-        },
+      const response = await axios.get(`https://openlibrary.org${workKey}/editions.json`, {
+        params: { limit: englishOnly ? limit * 3 : limit * 2, offset: 0 }, // Fetch more if filtering heavily
         timeout: 8000
       });
 
       if (!response.data?.entries?.length) {
-        return {
-          success: true,
-          totalEditions: 0,
-          editions: [],
-          message: 'No editions found'
-        };
+        return { success: true, totalEditions: 0, editions: [], message: 'No editions found' };
       }
 
-      // Parse and format editions
-      const editions = response.data.entries
+      const normalizeTitleForComparison = (title) => {
+        if (!title) return '';
+        return title.toLowerCase().replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim();
+      };
+
+      const isEnglishEditionStrict = (rawEditionData) => {
+        if (!rawEditionData || !rawEditionData.languages || rawEditionData.languages.length === 0) {
+          return false; 
+        }
+        const language = rawEditionData.languages[0];
+        if (typeof language === 'object' && language.key) {
+          const langKey = language.key.toLowerCase();
+          return langKey === '/languages/eng' || langKey === '/languages/en';
+        }
+        if (typeof language === 'string') {
+          const langStr = language.toLowerCase().trim();
+          return langStr === 'en' || langStr === 'eng' || langStr === 'english';
+        }
+        return false; 
+      };
+
+      let editions = response.data.entries
         .map(edition => this.parseOpenLibraryEdition(edition))
-        .filter(edition => edition.title) // Filter out invalid entries
-        .sort((a, b) => {
-          // Sort by publication date (newest first)
-          const yearA = parseInt(a.publishedDate) || 0;
-          const yearB = parseInt(b.publishedDate) || 0;
-          return yearB - yearA;
+        .filter(edition => edition.title); 
+
+      if (englishOnly) {
+        const originalCount = editions.length;
+        const normOriginalTitle = originalTitle ? normalizeTitleForComparison(originalTitle) : null;
+        
+        console.log(`[DEBUG] English-only filtering for "${originalTitle}". ${originalCount} editions before filtering.`);
+        editions.forEach((edition, index) => {
+          const rawLanguages = edition.rawData?.languages;
+          const isMarkedStrictlyEnglish = isEnglishEditionStrict(edition.rawData);
+          console.log(`[DEBUG] Edition ${index + 1}/${originalCount}: "${edition.title}" | Langs: ${JSON.stringify(rawLanguages)} | StrictEnglishCheck: ${isMarkedStrictlyEnglish}`);
         });
 
-      console.log(`📖 Found ${editions.length} editions for ${workKey}`);
+        editions = editions.filter(edition => {
+          const isMarkedEnglish = isEnglishEditionStrict(edition.rawData);
+          
+          if (!isMarkedEnglish) {
+            // console.log(`📚 Filtering non-English edition: "${edition.title}" (Langs: ${JSON.stringify(edition.rawData?.languages)})`);
+            return false; 
+          }
+
+          if (normOriginalTitle && edition.title) {
+            const normEditionTitle = normalizeTitleForComparison(edition.title);
+            if (normEditionTitle.length > 3 && normOriginalTitle.length > 3) {
+              if (!normEditionTitle.includes(normOriginalTitle) && !normOriginalTitle.includes(normEditionTitle)) {
+                // Add a check for significant word overlap if simple .includes fails
+                const originalWords = new Set(normOriginalTitle.split(' '));
+                const editionWords = new Set(normEditionTitle.split(' '));
+                const intersection = new Set([...originalWords].filter(word => editionWords.has(word)));
+                const MIN_SHARED_WORDS = 2; // e.g., "Project Hail Mary" vs "Projet Ave Maria" might share "project" and "mary" in some languages after transliteration
+                
+                // For very different titles like "Der Astronaut" vs "Project Hail Mary", intersection will be 0 or 1.
+                if (intersection.size < MIN_SHARED_WORDS && originalWords.size > 1 && editionWords.size > 1) {
+                   console.log(`📚 Filtering edition "${edition.title}" (Normalized: "${normEditionTitle}") due to title mismatch with "${originalTitle}" (Normalized: "${normOriginalTitle}"). Langs: ${JSON.stringify(edition.rawData?.languages)}. Shared words: ${intersection.size}.`);
+                   return false;
+                }
+              }
+            }
+          }
+          return true;
+        });
+        console.log(`🌍 Filtered ${originalCount - editions.length} editions (English-only & title match). ${editions.length} remaining for ${workKey}.`);
+      }
+
+      editions = editions
+        .sort((a, b) => (parseInt(b.publishedDate) || 0) - (parseInt(a.publishedDate) || 0))
+        .slice(0, limit);
+
+      console.log(`📖 Found ${editions.length} final editions for ${workKey}`);
 
       return {
         success: true,
-        totalEditions: response.data.size || editions.length,
+        totalEditions: response.data.size || editions.length, // This might be inaccurate after heavy filtering
         editions: editions,
         workKey: workKey
       };

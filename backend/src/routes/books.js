@@ -184,11 +184,13 @@ router.get('/suggestions', async (req, res) => {
  * - workKey: Open Library work key (e.g., "OL123456W")
  * Query parameters:
  * - limit: max results (1-50) - default: 20
+ * - englishOnly: filter to English-only editions (true/false) - default: false
+ * - originalTitle: original title of the book (optional)
  */
 router.get('/editions/:workKey', async (req, res) => {
   try {
     const { workKey } = req.params;
-    const { limit = 20 } = req.query;
+    const { limit = 20, englishOnly = 'false', originalTitle = '' } = req.query;
 
     // Validation
     if (!workKey) {
@@ -199,10 +201,12 @@ router.get('/editions/:workKey', async (req, res) => {
     }
 
     const parsedLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
+    const filterEnglishOnly = englishOnly === 'true' || englishOnly === true;
+    const decodedOriginalTitle = originalTitle ? decodeURIComponent(originalTitle) : '';
 
-    console.log(`📚 Getting editions for work: ${workKey} (limit: ${parsedLimit})`);
+    console.log(`📚 Getting editions for work: ${workKey} (limit: ${parsedLimit}${filterEnglishOnly ? `, English-only, originalTitle: "${decodedOriginalTitle}"` : ''})`);
 
-    const result = await bookSearchService.getBookEditions(workKey, parsedLimit);
+    const result = await bookSearchService.getBookEditions(workKey, parsedLimit, filterEnglishOnly, decodedOriginalTitle);
 
     if (!result.success) {
       return res.status(500).json({
@@ -217,7 +221,8 @@ router.get('/editions/:workKey', async (req, res) => {
         workKey: result.workKey,
         totalEditions: result.totalEditions,
         editions: result.editions,
-        message: result.message
+        message: result.message,
+        filteredForEnglish: filterEnglishOnly
       }
     });
 

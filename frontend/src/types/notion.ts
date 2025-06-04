@@ -124,6 +124,7 @@ export interface NotionIntegrationSettings {
   fieldMapping: BookToNotionMapping;
   defaultValues: Record<string, any>;
   autoAddBooks: boolean;
+  useEnglishOnlySources?: boolean; // Filter out non-English sources
 }
 
 export interface NotionAuthResponse {

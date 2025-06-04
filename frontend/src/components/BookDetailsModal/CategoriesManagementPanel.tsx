@@ -89,7 +89,7 @@ const CategoriesManagementPanel: React.FC<CategoriesManagementPanelProps> = ({
   };
 
   return (
-    <div className="w-1/2 p-6 overflow-y-auto">
+    <div className="w-1/2 p-6 overflow-y-auto relative z-[1]">
       <div className="mb-4">
         <div 
           className="flex items-center justify-between p-3 mb-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"

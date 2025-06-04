@@ -22,6 +22,7 @@ export interface AudiobookData {
   language?: string;
   asin?: string;
   audibleUrl?: string;
+  isEarlierDate?: boolean; // Flag to indicate if audiobook date is earlier than book dates
   
   // User selection context
   selectionContext?: {
@@ -171,6 +172,7 @@ export interface BookEditionsResponse {
     totalEditions: number;
     editions: BookEdition[];
     message?: string;
+    filteredForEnglish?: boolean;
   };
   error?: string;
 } 

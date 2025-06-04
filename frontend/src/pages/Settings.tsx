@@ -44,6 +44,9 @@ const Settings: React.FC = () => {
   // Page icon setting (separate from field mappings)
   const [usePageIcon, setUsePageIcon] = useState<boolean>(false);
 
+  // Language filtering setting
+  const [useEnglishOnlySources, setUseEnglishOnlySources] = useState<boolean>(true);
+
   // Loading states
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(false);
   const [isLoadingProperties, setIsLoadingProperties] = useState(false);
@@ -200,6 +203,7 @@ const Settings: React.FC = () => {
           audiobookRating: '',
         });
         setUsePageIcon(pageIcon || false);
+        setUseEnglishOnlySources(settings.useEnglishOnlySources ?? true); // Default to true
       }
     } catch (error) {
       console.error('📄 Settings page: ❌ Failed to load settings:', error);
@@ -245,6 +249,7 @@ const Settings: React.FC = () => {
         fieldMapping: { ...fieldMappings, pageIcon: usePageIcon },
         defaultValues: {},
         autoAddBooks: false,
+        useEnglishOnlySources: useEnglishOnlySources,
       };
 
       console.log('📄 Settings page: 💾 Saving settings');
@@ -410,6 +415,30 @@ const Settings: React.FC = () => {
             )}
           </div>
 
+          {/* Source Filtering Settings */}
+          {selectedDatabase && (
+            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Source Filtering</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={useEnglishOnlySources}
+                      onChange={(e) => setUseEnglishOnlySources(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Use English-only sources</span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                    Filter out non-English book sources to reduce clutter and improve relevance
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Field Mappings */}
           {selectedDatabase && databaseProperties && (
             <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mb-6">
@@ -522,6 +551,30 @@ const Settings: React.FC = () => {
                             className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                           />
                           <span className="ml-2 text-sm text-gray-700">Use book cover as page icon</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* English-only Sources Setting */}
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Source Language Filtering
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">Filter out non-English sources when selecting book data</p>
+                      </div>
+                      
+                      <div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={useEnglishOnlySources}
+                            onChange={(e) => setUseEnglishOnlySources(e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">Use English-only sources</span>
                         </label>
                       </div>
                     </div>
