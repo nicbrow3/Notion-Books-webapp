@@ -243,7 +243,8 @@ router.get('/editions/:workKey', async (req, res) => {
  * - q: search query (required)
  * - type: search type (isbn, title, author, general) - default: general
  * - limit: max results (1-40) - default: 10
- * - includeAudiobooks: whether to enrich with audiobook data (true/false) - default: false
+ * - includeAudiobooks: whether to enrich with audiobook data (true/false/'top') - default: false
+ *                     'top' value will only load audiobook data for the top result
  */
 router.get('/search', async (req, res) => {
   try {
@@ -272,12 +273,19 @@ router.get('/search', async (req, res) => {
     const maxResults = Math.min(Math.max(parseInt(limit) || 10, 1), 40);
     
     // Parse includeAudiobooks parameter
-    const shouldIncludeAudiobooks = includeAudiobooks === 'true' || includeAudiobooks === true;
+    let audiobookOption = false;
+    if (includeAudiobooks === 'true' || includeAudiobooks === true) {
+      audiobookOption = true;
+    } else if (includeAudiobooks === 'top') {
+      audiobookOption = 'top';
+    }
 
-    console.log(`📚 Book search request: "${query}" (type: ${type}, limit: ${maxResults}${shouldIncludeAudiobooks ? ', with audiobooks' : ''})`);
+    console.log(`📚 Book search request: "${query}" (type: ${type}, limit: ${maxResults}${
+      audiobookOption ? audiobookOption === 'top' ? ', with audiobook for top result' : ', with audiobooks' : ''
+    })`);
 
     // Search books using enhanced service with original publication dates and optional audiobook data
-    const result = await bookSearchService.searchBooks(query, type, maxResults, shouldIncludeAudiobooks);
+    const result = await bookSearchService.searchBooks(query, type, maxResults, audiobookOption);
 
     // Log search results
     console.log(`✅ Found ${result.books.length} books for query: "${query}"`);
@@ -291,11 +299,19 @@ router.get('/search', async (req, res) => {
     }
     
     // Log audiobook enrichment results
-    if (shouldIncludeAudiobooks) {
+    if (audiobookOption) {
       const booksWithAudiobooks = result.books.filter(book => 
         book.audiobookData && book.audiobookData.hasAudiobook
       );
-      console.log(`🎧 Found audiobook data for ${booksWithAudiobooks.length} books`);
+      if (audiobookOption === 'top') {
+        const topBookHasAudiobook = result.books.length > 0 && 
+          result.books[0].audiobookData && 
+          result.books[0].audiobookData.hasAudiobook;
+        
+        console.log(`🎧 Top result audiobook status: ${topBookHasAudiobook ? 'Found' : 'Not found'}`);
+      } else {
+        console.log(`🎧 Found audiobook data for ${booksWithAudiobooks.length} books`);
+      }
     }
 
     res.json({
@@ -308,7 +324,7 @@ router.get('/search', async (req, res) => {
         books: result.books,
         source: result.source,
         enhancedWithOriginalDates: booksWithOriginalDates.length,
-        includeAudiobooks: shouldIncludeAudiobooks
+        includeAudiobooks: audiobookOption
       }
     });
 

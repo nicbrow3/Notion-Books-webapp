@@ -14,7 +14,8 @@ class BookSearchService {
    * @param {string} query - Search query
    * @param {string} searchType - Type of search (isbn, title, author, general)
    * @param {number} maxResults - Maximum number of results
-   * @param {boolean} includeAudiobooks - Whether to enrich results with audiobook data
+   * @param {boolean|string} includeAudiobooks - Whether to enrich results with audiobook data 
+   *                                           - Can be boolean or string 'top' to only enrich top result
    * @returns {Promise<Object>} Enhanced book data with merged results from both APIs
    */
   async searchBooks(query, searchType = 'general', maxResults = 10, includeAudiobooks = false) {
@@ -58,24 +59,44 @@ class BookSearchService {
 
       // Enrich with audiobook data if requested
       if (includeAudiobooks && finalBooks.length > 0) {
-        console.log('🎧 Enriching results with audiobook data...');
+        // Determine audiobook loading strategy
+        const audiobookStrategy = includeAudiobooks === 'top' ? 'top_only' : 'all';
+        console.log(`🎧 Enriching results with audiobook data (strategy: ${audiobookStrategy})...`);
         
-        // First, add Google audiobook hints
-        const booksWithGoogleHints = await Promise.all(
-          finalBooks.map(book => this.enhanceWithGoogleAudiobookHints(book))
-        );
-        
-        // Then enrich with Audnexus data
-        finalBooks = await Promise.all(
-          booksWithGoogleHints.map(book => this.audiobookService.enrichWithAudiobookData(book))
-        );
-        
-        // Count how many books have audiobook data
-        const audiobookCount = finalBooks.filter(book => 
-          book.audiobookData?.hasAudiobook || book.googleAudiobookHints
-        ).length;
-        
-        console.log(`🎧 Found audiobook data for ${audiobookCount} books`);
+        if (audiobookStrategy === 'top_only' && finalBooks.length > 0) {
+          // Only enrich the top result
+          console.log(`🎧 Loading audiobook data for top result only: "${finalBooks[0].title}"`);
+          
+          // Add Google audiobook hints
+          const topBookWithHints = await this.enhanceWithGoogleAudiobookHints(finalBooks[0]);
+          
+          // Then enrich with Audnexus data
+          const topBookWithAudiobook = await this.audiobookService.enrichWithAudiobookData(topBookWithHints);
+          
+          // Replace top book with enriched version
+          finalBooks[0] = topBookWithAudiobook;
+          
+          const hasAudiobook = topBookWithAudiobook.audiobookData?.hasAudiobook || false;
+          console.log(`🎧 Top result audiobook data loaded (hasAudiobook: ${hasAudiobook})`);
+        } else {
+          // Enrich all results
+          // First, add Google audiobook hints
+          const booksWithGoogleHints = await Promise.all(
+            finalBooks.map(book => this.enhanceWithGoogleAudiobookHints(book))
+          );
+          
+          // Then enrich with Audnexus data
+          finalBooks = await Promise.all(
+            booksWithGoogleHints.map(book => this.audiobookService.enrichWithAudiobookData(book))
+          );
+          
+          // Count how many books have audiobook data
+          const audiobookCount = finalBooks.filter(book => 
+            book.audiobookData?.hasAudiobook || book.googleAudiobookHints
+          ).length;
+          
+          console.log(`🎧 Found audiobook data for ${audiobookCount} books`);
+        }
       }
 
       // Determine source

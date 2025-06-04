@@ -38,7 +38,15 @@ const Search: React.FC = () => {
     setSelectedBook(null);
 
     try {
-      const results = await BookService.searchBooks(params);
+      // Update params to include audiobook data for top result
+      const searchParams: SearchParams = { 
+        ...params, 
+        includeAudiobooks: 'top' as const // Automatically load audiobook data for top result
+      };
+      
+      console.log('🔍 Searching with audiobook data for top result');
+      const results = await BookService.searchBooks(searchParams);
+      
       setSearchResults(results);
       
       if (!results.books || results.books.length === 0) {

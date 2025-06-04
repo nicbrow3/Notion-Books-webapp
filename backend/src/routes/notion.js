@@ -578,11 +578,16 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
 
       case 'files':
         if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
+          // Format as external file with image extension to help Notion recognize it as an image
+          // Add timestamp to prevent caching issues and ensure each upload is treated as unique
+          const timestamp = Date.now();
+          const fileName = `book_cover_${timestamp}.jpg`;
+          
           return {
             files: [
               {
                 type: 'external',
-                name: 'Cover',
+                name: fileName,
                 external: {
                   url: value
                 }
@@ -794,6 +799,7 @@ router.post('/pages/book', requireAuth, async (req, res) => {
 
     // Add page icon if enabled and thumbnail is available
     if (fieldMappings?.pageIcon && bookData.thumbnail) {
+      console.log('Using thumbnail as page icon:', bookData.thumbnail);
       pageData.icon = {
         type: 'external',
         external: {

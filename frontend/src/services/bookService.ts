@@ -3,13 +3,14 @@ import { API_BASE_URL } from '../utils/api';
 
 export class BookService {
   static async searchBooks(params: SearchParams): Promise<BookSearchResponse> {
-    const { query, type, limit = 10 } = params;
+    const { query, type, limit = 10, includeAudiobooks = false } = params;
     
     const searchParams = new URLSearchParams({
       q: query,
       type,
       limit: limit.toString(),
-      includeAudiobooks: 'false' // Don't include audiobooks in main search for performance
+      includeAudiobooks: includeAudiobooks === true ? 'true' : 
+                        includeAudiobooks === 'top' ? 'top' : 'false'
     });
 
     const response = await fetch(`${API_BASE_URL}/api/books/search?${searchParams}`, {
@@ -45,7 +46,7 @@ export class BookService {
       q: book.title,
       type: 'title',
       limit: '1',
-      includeAudiobooks: 'true'
+      includeAudiobooks: 'top' // Use the new 'top' option for more efficient loading
     });
 
     const response = await fetch(`${API_BASE_URL}/api/books/search?${searchParams}`, {

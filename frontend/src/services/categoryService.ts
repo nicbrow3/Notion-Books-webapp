@@ -682,4 +682,23 @@ export class CategoryService {
     delete settings.fieldDefaults[fieldName];
     this.saveSettings(settings);
   }
+
+  // Add methods to save and get audiobook cover preference
+  static savePreferAudiobookCovers = (value: boolean): void => {
+    try {
+      localStorage.setItem('preferAudiobookCovers', JSON.stringify(value));
+    } catch (e) {
+      console.error('Error saving audiobook cover preference:', e);
+    }
+  };
+
+  static getPreferAudiobookCovers = (): boolean => {
+    try {
+      const value = localStorage.getItem('preferAudiobookCovers');
+      return value ? JSON.parse(value) : false;
+    } catch (e) {
+      console.error('Error getting audiobook cover preference:', e);
+      return false;
+    }
+  };
 } 

@@ -140,6 +140,7 @@ export interface SearchParams {
   query: string;
   type: SearchType;
   limit?: number;
+  includeAudiobooks?: boolean | 'top';
 }
 
 export interface BookEdition {

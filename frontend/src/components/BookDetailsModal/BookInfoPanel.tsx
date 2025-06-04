@@ -11,7 +11,7 @@ export interface FieldSelections {
   pageCount: 'original' | number;
   publishedDate: 'audiobook' | 'original' | 'first_published' | number;
   isbn: 'original' | number;
-  thumbnail: 'original' | number;
+  thumbnail: 'original' | 'audiobook' | number;
 }
 
 interface BookInfoPanelProps {
@@ -24,6 +24,186 @@ interface BookInfoPanelProps {
   onSelectEdition?: (edition: any) => void;
   onFieldSelectionChange?: (fieldSelections: FieldSelections, selectedData: any) => void;
 }
+
+// ThumbnailSelector component
+interface ThumbnailSelectorProps {
+  book: BookSearchResult;
+  editions: any[];
+  selectedValue: 'original' | 'audiobook' | number;
+  onSelect: (value: 'original' | 'audiobook' | number) => void;
+  filteredEditions: any[];
+  createEditionLabel: (edition: any, index: number) => string;
+}
+
+const ThumbnailSelector: React.FC<ThumbnailSelectorProps> = ({ 
+  book, 
+  editions, 
+  selectedValue, 
+  onSelect,
+  filteredEditions,
+  createEditionLabel
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [preferAudiobook, setPreferAudiobook] = useState<boolean>(() => {
+    // Initialize from saved preference
+    return CategoryService.getPreferAudiobookCovers() || false;
+  });
+
+  // Get available thumbnail sources
+  const getThumbnailSources = () => {
+    const sources: Array<{value: 'audiobook' | 'original' | number, label: string, content: string}> = [];
+    
+    // Original book thumbnail
+    if (book.thumbnail) {
+      sources.push({
+        value: 'original',
+        label: 'Original Book',
+        content: book.thumbnail
+      });
+    }
+
+    // Audiobook thumbnail
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.image) {
+      sources.push({
+        value: 'audiobook',
+        label: 'Audiobook',
+        content: book.audiobookData.image
+      });
+    }
+
+    // Edition thumbnails
+    filteredEditions.forEach((edition, index: number) => {
+      if (edition.thumbnail) {
+        // Find the original index in the unfiltered editions array
+        const originalIndex = editions.findIndex(e => e.id === edition.id);
+        sources.push({
+          value: originalIndex !== -1 ? originalIndex : index,
+          label: createEditionLabel(edition, originalIndex !== -1 ? originalIndex : index),
+          content: edition.thumbnail
+        });
+      }
+    });
+
+    return sources;
+  };
+
+  const sources = getThumbnailSources();
+  const selectedSource = sources.find(source => source.value === selectedValue) || sources[0];
+  
+  // Check if the selected source is audiobook
+  const isAudiobook = selectedValue === 'audiobook';
+
+  // Handle preference change
+  const handlePreferenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.checked;
+    setPreferAudiobook(newValue);
+    // Save the preference
+    CategoryService.savePreferAudiobookCovers(newValue);
+  };
+
+  return (
+    <>
+      <div 
+        className="cursor-pointer relative group" 
+        onClick={() => setIsOpen(true)}
+        title="Click to select cover image"
+      >
+        {selectedSource?.content ? (
+          <div className={`${isAudiobook ? 'relative h-48' : 'w-32 h-48'} rounded shadow-lg overflow-hidden flex items-center justify-center bg-gray-100`}>
+            <img
+              src={selectedSource.content}
+              alt={`Cover of ${book.title}`}
+              className={`
+                ${isAudiobook 
+                  ? 'h-full w-auto max-w-none' 
+                  : 'w-full h-full object-cover'
+                } 
+                group-hover:opacity-90 transition-opacity
+              `}
+              onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
+            />
+            {isAudiobook && (
+              <div className="absolute bottom-2 left-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
+                Audiobook
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="w-32 h-48 bg-gray-200 rounded shadow-lg flex items-center justify-center group-hover:bg-gray-300 transition-colors">
+            <span className="text-gray-400 text-sm text-center">No Cover</span>
+          </div>
+        )}
+        
+        {sources.length > 1 && (
+          <div className="absolute bottom-2 right-2 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg">
+            <span className="text-xs">{sources.length}</span>
+          </div>
+        )}
+      </div>
+
+      {isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center" onClick={() => setIsOpen(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">Select Cover Image</h3>
+            
+            <div className="mb-4 pb-3 border-b border-gray-200">
+              <label className="flex items-center text-sm">
+                <input
+                  type="checkbox"
+                  className="mr-2 h-4 w-4 text-blue-600 rounded"
+                  checked={preferAudiobook}
+                  onChange={handlePreferenceChange}
+                />
+                <span>Always prefer audiobook covers when available</span>
+              </label>
+            </div>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {sources.map((source, i) => {
+                const isSourceAudiobook = source.value === 'audiobook';
+                return (
+                  <div 
+                    key={i} 
+                    className={`cursor-pointer p-2 rounded hover:bg-blue-50 transition-colors ${selectedValue === source.value ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+                    onClick={() => {
+                      onSelect(source.value);
+                      setIsOpen(false);
+                    }}
+                  >
+                    <div className="h-40 overflow-hidden rounded mb-2 flex items-center justify-center bg-gray-100">
+                      <img 
+                        src={source.content} 
+                        alt={source.label}
+                        className={`max-w-full max-h-full ${isSourceAudiobook ? 'object-contain' : 'object-cover'}`}
+                        onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-center text-gray-700 truncate">{source.label}</p>
+                    {isSourceAudiobook && <p className="text-xs text-center text-blue-500">Audiobook</p>}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => setIsOpen(false)} 
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
 
 const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
   book,
@@ -76,6 +256,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     const savedPublisherDefault = CategoryService.getFieldDefault('publisher');
     const savedPageCountDefault = CategoryService.getFieldDefault('pages');
     const savedPublishedDateDefault = CategoryService.getFieldDefault('publisheddate');
+    const savedThumbnailDefault = CategoryService.getFieldDefault('thumbnail');
 
     // Use saved defaults if available
     if (savedDescriptionDefault !== null && fieldSelections.description === 'original') {
@@ -94,6 +275,10 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       newSelections.publishedDate = savedPublishedDateDefault;
       hasChanges = true;
     }
+    if (savedThumbnailDefault !== null && fieldSelections.thumbnail === 'original') {
+      newSelections.thumbnail = savedThumbnailDefault;
+      hasChanges = true;
+    }
 
     // Check if audiobook has the isEarlierDate flag set, which means we already determined
     // the audiobook date is earlier than the book date during audiobook data loading
@@ -102,6 +287,18 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       newSelections.publishedDate = 'audiobook';
       hasChanges = true;
     }
+    
+    // Default to audiobook thumbnail if available and preference is set to prefer audiobooks
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.image && fieldSelections.thumbnail === 'original') {
+      // Check if user has set a preference for audiobook covers
+      const preferAudiobookCovers = CategoryService.getPreferAudiobookCovers();
+      if (preferAudiobookCovers) {
+        console.log('Defaulting to audiobook cover based on user preference');
+        newSelections.thumbnail = 'audiobook';
+        hasChanges = true;
+      }
+    }
+
     // Fallback to smart defaults if no saved preferences and no isEarlierDate flag
     else if (!hasChanges) {
       // Default to audiobook description if available and not already set to audiobook
@@ -457,6 +654,19 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     return book.publishedDate || book.originalPublishedDate || '';
   };
 
+  // Get the selected thumbnail
+  const getSelectedThumbnail = () => {
+    // Logic for thumbnail selection based on fieldSelections.thumbnail
+    if (fieldSelections.thumbnail === 'audiobook' && book.audiobookData?.hasAudiobook && book.audiobookData.image) {
+      return book.audiobookData.image;
+    } else if (typeof fieldSelections.thumbnail === 'number' && editions[fieldSelections.thumbnail]?.thumbnail) {
+      return editions[fieldSelections.thumbnail].thumbnail;
+    }
+    
+    // Default to original
+    return book.thumbnail;
+  };
+
   // Notify parent of current selections
   const notifyFieldSelectionChange = (newSelections?: FieldSelections) => {
     const selections = newSelections || fieldSelections;
@@ -466,7 +676,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
         publisher: getSelectedPublisher(),
         pageCount: getSelectedPageCount(),
         publishedDate: getSelectedPublishedDate(),
-        // Add more fields as needed
+        thumbnail: getSelectedThumbnail(),
       };
       onFieldSelectionChange(selections, selectedData);
     }
@@ -532,23 +742,18 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
   return (
     <div className="w-1/2 p-6 border-r border-gray-200 overflow-y-auto">
       <div className="flex gap-4 mb-6">
-        {/* Book Cover */}
+        {/* Book Cover - Now using ThumbnailSelector */}
         <div className="flex-shrink-0">
-          {book.thumbnail ? (
-            <img
-              src={book.thumbnail}
-              alt={`Cover of ${book.title}`}
-              className="w-32 h-48 object-cover rounded shadow-lg"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-              }}
-            />
-          ) : (
-            <div className="w-32 h-48 bg-gray-200 rounded shadow-lg flex items-center justify-center">
-              <span className="text-gray-400 text-sm text-center">No Cover</span>
-            </div>
-          )}
+          <ThumbnailSelector
+            book={book}
+            editions={editions}
+            selectedValue={fieldSelections.thumbnail}
+            onSelect={(value) => {
+              setFieldSelections(prev => ({ ...prev, thumbnail: value }));
+            }}
+            filteredEditions={getFilteredEditions()}
+            createEditionLabel={createEditionLabel}
+          />
         </div>
 
         {/* Basic Info */}

@@ -37,7 +37,15 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
       setSearchResults(null);
       setSelectedBook(null);
       
-      const results = await BookService.searchBooks(params);
+      // Update params to include audiobook data for top result
+      const searchParams: SearchParams = { 
+        ...params, 
+        includeAudiobooks: 'top' as const // Explicitly type as 'top'
+      };
+      
+      console.log('🔍 Searching with audiobook data for top result');
+      const results = await BookService.searchBooks(searchParams);
+      
       setSearchResults(results);
     } catch (error) {
       console.error('Search failed:', error);

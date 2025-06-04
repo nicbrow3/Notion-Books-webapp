@@ -684,6 +684,14 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
       };
 
+      // Log thumbnail data for debugging
+      console.log('📸 Thumbnail processing for Notion:', {
+        originalThumbnail: currentBook.thumbnail,
+        selectedThumbnail: selectedFieldData?.thumbnail,
+        finalThumbnail: getFinalBookData().thumbnail,
+        thumbnailInRequestData: bookDataWithSelectedCategories.thumbnail
+      });
+
       console.log('📅 Date processing for Notion:', {
         originalDate: getFinalBookData().originalPublishedDate,
         editionDate: getFinalBookData().publishedDate,
@@ -791,6 +799,14 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         originalPublishedDate: getFinalBookData().originalPublishedDate,
         audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
       };
+
+      // Log thumbnail data for debugging
+      console.log('📸 Thumbnail processing for Notion (Replace):', {
+        originalThumbnail: currentBook.thumbnail,
+        selectedThumbnail: selectedFieldData?.thumbnail,
+        finalThumbnail: getFinalBookData().thumbnail,
+        thumbnailInRequestData: bookDataWithSelectedCategories.thumbnail
+      });
 
       // Extract page ID from URL (Notion URLs end with the page ID)
       // Notion page IDs are 32-character hex strings, often with title prefixes
@@ -1020,6 +1036,14 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         audiobookPublishedDate: getFinalBookData().audiobookData?.publishedDate
       };
 
+      // Log thumbnail data for debugging
+      console.log('📸 Thumbnail processing for Notion (Keep Both):', {
+        originalThumbnail: currentBook.thumbnail,
+        selectedThumbnail: selectedFieldData?.thumbnail,
+        finalThumbnail: getFinalBookData().thumbnail,
+        thumbnailInRequestData: bookDataWithSelectedCategories.thumbnail
+      });
+
       console.log('📅 Date processing for Notion (Keep Both):', {
         originalDate: getFinalBookData().originalPublishedDate,
         editionDate: getFinalBookData().publishedDate,
@@ -1136,6 +1160,8 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       description: selectedFieldData.description || currentBook.description,
       publisher: selectedFieldData.publisher || currentBook.publisher,
       pageCount: selectedFieldData.pageCount || currentBook.pageCount,
+      publishedDate: selectedFieldData.publishedDate || currentBook.publishedDate,
+      thumbnail: selectedFieldData.thumbnail || currentBook.thumbnail,
       // Add more fields as implemented
     };
   };
