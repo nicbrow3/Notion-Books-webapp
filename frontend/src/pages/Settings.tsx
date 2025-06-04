@@ -415,30 +415,6 @@ const Settings: React.FC = () => {
             )}
           </div>
 
-          {/* Source Filtering Settings */}
-          {selectedDatabase && (
-            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Source Filtering</h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={useEnglishOnlySources}
-                      onChange={(e) => setUseEnglishOnlySources(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Use English-only sources</span>
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1 ml-6">
-                    Filter out non-English book sources to reduce clutter and improve relevance
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Field Mappings */}
           {selectedDatabase && databaseProperties && (
             <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mb-6">

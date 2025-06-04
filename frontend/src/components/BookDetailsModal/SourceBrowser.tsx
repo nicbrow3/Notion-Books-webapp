@@ -21,9 +21,21 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const hideTooltipTimeoutRef = useRef<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{top: number, left: number} | null>(null);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{top: number, left: number} | null>(null);
+  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+
+  // Clear any existing timeout when component unmounts
+  useEffect(() => {
+    return () => {
+      if (hideTooltipTimeoutRef.current !== null) {
+        window.clearTimeout(hideTooltipTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Prevent background scrolling when dropdown is open
   useEffect(() => {
@@ -59,13 +71,92 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
 
   // Update tooltip position when hovering over an item
   const updateTooltipPosition = (event: React.MouseEvent<HTMLDivElement>, itemType: string) => {
+    // Clear any existing hide timeout when hovering a new item
+    if (hideTooltipTimeoutRef.current !== null) {
+      window.clearTimeout(hideTooltipTimeoutRef.current);
+      hideTooltipTimeoutRef.current = null;
+    }
+    
     const rect = event.currentTarget.getBoundingClientRect();
-    setTooltipPosition({
-      top: rect.top,
-      left: rect.right + 10 // 10px offset from the right edge
-    });
+    
+    // Calculate tooltip dimensions - we'll use an initial estimate, then adjust after render
+    const tooltipWidth = 350; // Width of the tooltip (from the CSS)
+    
+    // Get viewport dimensions
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    
+    // Default position (right of the element)
+    let top = rect.top;
+    let left = rect.right + 10; // 10px offset from the right edge
+    
+    // Check if tooltip would go beyond right edge of viewport
+    if (left + tooltipWidth > viewportWidth - 20) { // 20px buffer from right
+      // Position to the left of the element
+      left = rect.left - tooltipWidth - 10;
+      
+      // If that would go beyond left edge, just align to left edge with a buffer
+      if (left < 20) {
+        left = 20;
+      }
+    }
+    
+    setTooltipPosition({ top, left });
     setHoveredItem(itemType);
   };
+
+  // Handle mouse leave for source items
+  const handleMouseLeave = () => {
+    // Instead of hiding immediately, set a timeout
+    hideTooltipTimeoutRef.current = window.setTimeout(() => {
+      // Only hide if the tooltip isn't being hovered directly
+      if (!isTooltipHovered) {
+        setHoveredItem(null);
+      }
+      hideTooltipTimeoutRef.current = null;
+    }, 300); // 300ms delay gives time to move to the tooltip
+  };
+  
+  // Handle when mouse enters the tooltip
+  const handleTooltipMouseEnter = () => {
+    // Clear any pending hide timeout
+    if (hideTooltipTimeoutRef.current !== null) {
+      window.clearTimeout(hideTooltipTimeoutRef.current);
+      hideTooltipTimeoutRef.current = null;
+    }
+    setIsTooltipHovered(true);
+  };
+  
+  // Handle when mouse leaves the tooltip
+  const handleTooltipMouseLeave = () => {
+    setIsTooltipHovered(false);
+    // Hide tooltip after a small delay to prevent flickering
+    // if the mouse quickly moves back to the source
+    hideTooltipTimeoutRef.current = window.setTimeout(() => {
+      setHoveredItem(null);
+      hideTooltipTimeoutRef.current = null;
+    }, 100);
+  };
+  
+  // Adjust tooltip position after it's been rendered to ensure it's visible
+  useEffect(() => {
+    if (tooltipRef.current && tooltipPosition) {
+      // Get actual dimensions of the rendered tooltip
+      const tooltipRect = tooltipRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      // Check if the tooltip extends beyond the bottom of the screen
+      if (tooltipRect.bottom > viewportHeight - 20) {
+        // Calculate new top position to fit in viewport with 20px buffer
+        const newTop = Math.max(20, viewportHeight - tooltipRect.height - 20);
+        
+        // Only update if the position needs to change
+        if (newTop !== tooltipPosition.top) {
+          setTooltipPosition(prev => prev ? { ...prev, top: newTop } : null);
+        }
+      }
+    }
+  }, [hoveredItem, tooltipPosition]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -94,12 +185,15 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
   const totalSources = 1 + (book.audiobookData?.hasAudiobook ? 1 : 0) + filteredEditions.length;
 
   // Format source name for display
-  const formatSourceName = () => {
-    if (book.source === 'merged_apis') return 'Google Books + Open Library';
-    if (book.source === 'open_library_primary') return 'Open Library';
-    if (book.source === 'google_books_enhanced') return 'Google Books (Enhanced)';
-    if (book.source === 'open_library_edition') return 'Open Library Edition';
-    return book.source || 'Unknown';
+  const formatSourceName = (source: string | undefined) => {
+    if (!source) return 'Unknown';
+    if (source === 'merged_apis') return 'Google Books + Open Library';
+    if (source === 'open_library_primary') return 'Open Library';
+    if (source === 'google_books_enhanced') return 'Google Books (Enhanced)';
+    if (source === 'open_library_edition') return 'Open Library Edition';
+    if (source === 'google_books') return 'Google Books';
+    if (source === 'audnexus') return 'Audnexus';
+    return source;
   };
 
   // Helper function to display a field only if it exists
@@ -124,11 +218,16 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
 
     return createPortal(
       <div 
+        ref={tooltipRef}
         className="fixed shadow-lg w-[350px] bg-white border border-gray-200 rounded-md p-3 z-[99999]"
         style={{
           top: `${tooltipPosition.top}px`,
           left: `${tooltipPosition.left}px`,
+          maxHeight: '80vh',
+          overflowY: 'auto'
         }}
+        onMouseEnter={handleTooltipMouseEnter}
+        onMouseLeave={handleTooltipMouseLeave}
       >
         <div className="text-sm text-gray-600 space-y-1">
           {renderField('ISBN-10', book.isbn10)}
@@ -165,11 +264,16 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
 
     return createPortal(
       <div 
+        ref={tooltipRef}
         className="fixed shadow-lg w-[350px] bg-white border border-purple-200 rounded-md p-3 z-[99999]"
         style={{
           top: `${tooltipPosition.top}px`,
           left: `${tooltipPosition.left}px`,
+          maxHeight: '80vh',
+          overflowY: 'auto'
         }}
+        onMouseEnter={handleTooltipMouseEnter}
+        onMouseLeave={handleTooltipMouseLeave}
       >
         <div className="text-sm text-purple-800 space-y-1">
           {renderField('ASIN', book.audiobookData.asin)}
@@ -207,11 +311,16 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
 
     return createPortal(
       <div 
+        ref={tooltipRef}
         className="fixed shadow-lg w-[350px] bg-white border border-gray-200 rounded-md p-3 z-[99999]"
         style={{
           top: `${tooltipPosition.top}px`,
           left: `${tooltipPosition.left}px`,
+          maxHeight: '80vh',
+          overflowY: 'auto'
         }}
+        onMouseEnter={handleTooltipMouseEnter}
+        onMouseLeave={handleTooltipMouseLeave}
       >
         <div className="text-sm text-gray-600 space-y-1">
           {renderField('Author(s)', edition.authors?.join(', '))}
@@ -261,12 +370,12 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
           <div 
             className={`mb-4 p-3 border border-gray-200 rounded-md transition-all duration-200 ${hoveredItem === 'primary' ? 'shadow-md bg-gray-50' : 'hover:bg-gray-50'}`}
             onMouseEnter={(e) => updateTooltipPosition(e, 'primary')}
-            onMouseLeave={() => setHoveredItem(null)}
+            onMouseLeave={handleMouseLeave}
           >
             <div className="flex justify-between items-center mb-2">
               <div className="font-medium text-gray-900">Primary Source</div>
               <div className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                {formatSourceName()}
+                {formatSourceName(book.source)}
               </div>
             </div>
             <div className="text-sm text-gray-600 space-y-1">
@@ -285,7 +394,7 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
             <div 
               className={`mb-4 p-3 border border-purple-200 rounded-md transition-all duration-200 ${hoveredItem === 'audiobook' ? 'shadow-md bg-purple-50' : 'hover:bg-purple-50'}`}
               onMouseEnter={(e) => updateTooltipPosition(e, 'audiobook')}
-              onMouseLeave={() => setHoveredItem(null)}
+              onMouseLeave={handleMouseLeave}
             >
               <div className="flex justify-between items-center mb-2">
                 <div className="font-medium text-purple-900">Audiobook</div>
@@ -324,9 +433,14 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
                     key={index} 
                     className={`p-3 border border-gray-200 rounded-md transition-all duration-200 ${hoveredItem === `edition-${index}` ? 'shadow-md bg-gray-50' : 'hover:bg-gray-50'}`}
                     onMouseEnter={(e) => updateTooltipPosition(e, `edition-${index}`)}
-                    onMouseLeave={() => setHoveredItem(null)}
+                    onMouseLeave={handleMouseLeave}
                   >
-                    <div className="font-medium text-gray-800 text-sm">{edition.title}</div>
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="font-medium text-gray-800 text-sm">{edition.title}</div>
+                      <div className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                        {formatSourceName(edition.source)}
+                      </div>
+                    </div>
                     <div className="text-xs text-gray-600 mt-1">
                       {edition.publishedDate && <span className="mr-2">{edition.publishedDate}</span>}
                       {edition.publisher && <span>{edition.publisher}</span>}
