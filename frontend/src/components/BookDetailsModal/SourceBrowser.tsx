@@ -233,7 +233,8 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
           {renderField('ISBN-10', book.isbn10)}
           {renderField('Language', book.language)}
           {renderField('Categories', book.categories?.join(', '))}
-          {renderField('Original Published Date', book.originalPublishedDate)}
+          {renderField('First Published', book.openLibraryData?.firstPublishYear)}
+          {renderField('Copyright', book.copyright)}
           {renderField('Source', book.source)}
           {renderField('ID', book.id)}
           {book.thumbnail && (
@@ -279,6 +280,9 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
           {renderField('ASIN', book.audiobookData.asin)}
           {renderField('Language', book.audiobookData.language)}
           {renderField('Series', book.audiobookData.series)}
+          {renderField('Publisher', book.audiobookData.publisher)}
+          {renderField('Published Date', book.audiobookData.publishedDate)}
+          {renderField('Copyright', book.audiobookData.copyright)}
           {book.audiobookData.description && (
             <div className="mt-2">
               <span className="font-medium">Description:</span>
@@ -413,6 +417,8 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
                   renderField('Duration', `${book.audiobookData.totalDurationHours.toFixed(1)} hrs`)}
                 {book.audiobookData.rating && 
                   renderField('Rating', `${book.audiobookData.rating}/5 ${book.audiobookData.ratingCount ? `(${book.audiobookData.ratingCount} reviews)` : ''}`)}
+                {book.audiobookData.copyright && 
+                  renderField('Copyright', book.audiobookData.copyright)}
               </div>
             </div>
           )}

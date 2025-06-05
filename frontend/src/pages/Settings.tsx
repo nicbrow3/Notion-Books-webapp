@@ -41,15 +41,48 @@ const Settings: React.FC = () => {
   const [categorySettings, setCategorySettings] = useState<CategorySettings>({
     ignoredCategories: [],
     categoryMappings: {},
-    fieldDefaults: {}
+    fieldDefaults: {},
+    overriddenDefaultMappings: [],
+    autoFilterLocations: false
   });
+  const [initialCategorySettings, setInitialCategorySettings] = useState<CategorySettings | null>(null);
   const [showDefaultMappings, setShowDefaultMappings] = useState(false);
   const [isCustomMappingsCollapsed, setIsCustomMappingsCollapsed] = useState(false);
   const [isDefaultMappingsCollapsed, setIsDefaultMappingsCollapsed] = useState(false);
   const [isIgnoredCategoriesCollapsed, setIsIgnoredCategoriesCollapsed] = useState(false);
+  const [isFieldMappingsCollapsed, setIsFieldMappingsCollapsed] = useState(false);
 
   // Ref for file input
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if there are any unsaved changes in any settings
+  const hasUnsavedChanges = (): boolean => {
+    // Check if Notion settings aren't loaded yet
+    if (!notionSettings) return false;
+
+    // Check database selection change
+    if (selectedDatabase !== notionSettings.databaseId) return true;
+    
+    // Check field mappings changes
+    if (notionSettings.fieldMapping) {
+      const { pageIcon: savedPageIcon, ...savedMappings } = notionSettings.fieldMapping;
+      if (JSON.stringify({ ...fieldMappings, pageIcon: usePageIcon }) !== 
+          JSON.stringify({ ...savedMappings, pageIcon: savedPageIcon })) {
+        return true;
+      }
+    }
+    
+    // Check English-only sources setting change
+    if (useEnglishOnlySources !== (notionSettings.useEnglishOnlySources ?? false)) return true;
+    
+    // Check for changes in category settings
+    if (initialCategorySettings && categorySettings.autoFilterLocations !== initialCategorySettings.autoFilterLocations) {
+      return true;
+    }
+    
+    // No changes detected
+    return false;
+  };
 
   // Test API connections on component mount
   useEffect(() => {
@@ -83,6 +116,7 @@ const Settings: React.FC = () => {
   useEffect(() => {
     const settings = CategoryService.loadSettings();
     setCategorySettings(settings);
+    setInitialCategorySettings(settings);
     console.log('Loaded category settings:', settings);
   }, []);
 
@@ -152,6 +186,7 @@ const Settings: React.FC = () => {
    *     "categoryMappings": { [key: string]: string },
    *     "fieldDefaults": { [key: string]: any },
    *     "overriddenDefaultMappings": string[] // Default mappings that have been explicitly disabled
+   *     "autoFilterLocations": boolean // Automatically filter out location genres
    *   }
    * }
    * 
@@ -193,7 +228,11 @@ const Settings: React.FC = () => {
         overriddenDefaultMappings: Array.from(new Set([
           ...(currentCategorySettings.overriddenDefaultMappings || []),
           ...(importData.categorySettings.overriddenDefaultMappings || [])
-        ]))
+        ])),
+        // Update autoFilterLocations if present
+        autoFilterLocations: importData.categorySettings.autoFilterLocations !== undefined 
+          ? importData.categorySettings.autoFilterLocations 
+          : currentCategorySettings.autoFilterLocations || false
       };
       
       CategoryService.saveSettings(mergedCategorySettings);
@@ -364,7 +403,15 @@ const Settings: React.FC = () => {
       useEnglishOnlySources: useEnglishOnlySources,
     };
 
+    // Save Notion settings
     await saveSettings(settings);
+    
+    // Save category settings
+    CategoryService.saveSettings(categorySettings);
+    // Update initial settings to match current
+    setInitialCategorySettings({...categorySettings});
+    
+    toast.success('All settings saved successfully');
   };
 
   // Handle removing a category mapping
@@ -404,6 +451,18 @@ const Settings: React.FC = () => {
     const updatedSettings = CategoryService.loadSettings();
     setCategorySettings(updatedSettings);
     toast.success(`Removed "${category}" from ignored categories`);
+  };
+
+  // Toggle auto-filter locations setting
+  const handleToggleAutoFilterLocations = () => {
+    const updatedSettings = {
+      ...categorySettings,
+      autoFilterLocations: !categorySettings.autoFilterLocations
+    };
+    setCategorySettings(updatedSettings);
+    
+    // const status = updatedSettings.autoFilterLocations ? 'enabled' : 'disabled';
+    // toast.success(`Auto-filtering of location genres ${status} (unsaved)`);
   };
 
   const renderGoogleBooksStatus = () => {
@@ -570,7 +629,45 @@ const Settings: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
             <p className="text-gray-600">Configure your database connections and field mappings for book data.</p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex space-x-3 items-center">
+            {/* Show unsaved changes indicator */}
+            {isAuthenticated && hasUnsavedChanges() && (
+              <span className="text-orange-600 bg-orange-50 px-3 py-1 rounded-md text-sm font-medium">
+                Unsaved Changes
+              </span>
+            )}
+            
+            {/* Save Settings Button */}
+            {isAuthenticated && (
+              <button
+                onClick={handleSaveSettings}
+                disabled={isSavingSettings || !hasUnsavedChanges()}
+                className={`px-4 py-2 rounded-md text-white flex items-center transition-colors ${
+                  !hasUnsavedChanges()
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+                title={hasUnsavedChanges() ? "Save Settings" : "No changes to save"}
+              >
+                {isSavingSettings ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save
+                  </>
+                )}
+              </button>
+            )}
+            
             {/* Hidden file input */}
             <input 
               type="file" 
@@ -583,25 +680,25 @@ const Settings: React.FC = () => {
             {/* Import Button */}
             <button
               onClick={triggerFileInput}
-              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center"
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
               title="Import Settings"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Import Settings
+              Import
             </button>
             
             {/* Export Button */}
             <button
               onClick={handleExportSettings}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
+              className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors flex items-center"
               title="Export Settings"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
               </svg>
-              Export Settings
+              Export
             </button>
           </div>
         </div>
@@ -751,7 +848,7 @@ const Settings: React.FC = () => {
                           }
                         }}
                         selectedCategories={[]}
-                        isCollapsed={false}
+                        isCollapsed={isFieldMappingsCollapsed}
                         notionSettings={{
                           fieldMapping: { ...fieldMappings, pageIcon: usePageIcon }
                         }}
@@ -759,7 +856,7 @@ const Settings: React.FC = () => {
                         databaseProperties={databaseProperties}
                         loadingDatabaseProperties={false}
                         formatAuthors={(authors: string[]) => authors.join(', ')}
-                        onSetCollapsed={() => {}} // No-op since we don't want collapse in settings
+                        onSetCollapsed={(collapsed) => setIsFieldMappingsCollapsed(collapsed)}
                         onTempFieldMappingChange={handleFieldMappingChange}
                         onResetTempFieldMappings={() => {
                           // Reset to saved settings
@@ -774,88 +871,69 @@ const Settings: React.FC = () => {
                           // Save the current field mappings
                           await handleSaveSettings();
                         }}
-                        onHasUnsavedChanges={() => {
-                          // Check if current mappings differ from saved settings
-                          if (!notionSettings?.fieldMapping) return true;
-                          const { pageIcon: savedPageIcon, ...savedMappings } = notionSettings.fieldMapping;
-                          return JSON.stringify({ ...fieldMappings, pageIcon: usePageIcon }) !== 
-                                JSON.stringify({ ...savedMappings, pageIcon: savedPageIcon });
-                        }}
+                        onHasUnsavedChanges={hasUnsavedChanges}
                         showDataValues={false}
+                        hideUnsavedChangesIndicator={true}
                       />
-
-                      {/* Page Icon Setting - Keep this separate since it's not handled by NotionFieldMappings */}
-                      <div className="mt-6 pt-4 border-t border-gray-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                              Page Icon
-                            </label>
-                            <p className="text-xs text-gray-500 mt-1">Use book cover as page icon in Notion</p>
-                          </div>
-                          
-                          <div>
-                            <label className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={usePageIcon}
-                                onChange={(e) => setUsePageIcon(e.target.checked)}
-                                className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">Use book cover as page icon</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* English-only Sources Setting */}
-                      <div className="mt-6 pt-4 border-t border-gray-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                              Source Language Filtering
-                            </label>
-                            <p className="text-xs text-gray-500 mt-1">Filter out non-English sources when selecting book data</p>
-                          </div>
-                          
-                          <div>
-                            <label className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={useEnglishOnlySources}
-                                onChange={(e) => setUseEnglishOnlySources(e.target.checked)}
-                                className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">Use English-only sources</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
                     </>
                   )}
                 </div>
               )}
 
-              {/* Save Settings Button */}
-              {selectedDatabase && (
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleSaveSettings}
-                    disabled={isSavingSettings}
-                    className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                  >
-                    {isSavingSettings ? (
-                      <>
-                        <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Settings'
-                    )}
-                  </button>
+              {/* Display Preferences Section */}
+              {selectedDatabase && databaseProperties && (
+                <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold text-gray-900">Display Preferences</h2>
+                  </div>
+
+                  {/* Page Icon Setting */}
+                  <div className="mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Page Icon
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">Use book cover as page icon in Notion</p>
+                      </div>
+                      
+                      <div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={usePageIcon}
+                            onChange={(e) => setUsePageIcon(e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">Use book cover as page icon</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* English-only Sources Setting */}
+                  <div className="pt-4 border-t border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Source Language Filtering
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">Filter out non-English sources when selecting book data</p>
+                      </div>
+                      
+                      <div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={useEnglishOnlySources}
+                            onChange={(e) => setUseEnglishOnlySources(e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">Use English-only sources</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </>
@@ -867,20 +945,41 @@ const Settings: React.FC = () => {
             </div>
           )}
 
-          {/* Category Settings */}
+          {/* Genre Mappings */}
           <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mt-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Category Mappings</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Genres</h2>
             </div>
             
             <div className="mb-4">
               <p className="text-sm text-gray-600">
-                Category mappings allow you to standardize book categories across different sources. 
-                When a category matches a mapped entry, it will be converted to the preferred name.
+                Genre mappings allow you to standardize book genres across different sources. 
+                When a genre matches a mapped entry, it will be converted to the preferred name.
               </p>
             </div>
 
-            {/* Custom Category Mappings */}
+            {/* Auto-filter Locations */}
+            <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-gray-900">Auto-filter Location Genres</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Automatically de-select location-based genres like "England" or "New York" when importing books
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={categorySettings.autoFilterLocations} 
+                    onChange={handleToggleAutoFilterLocations}
+                    className="sr-only peer" 
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+            </div>
+
+            {/* User Genre Mappings */}
             <div className="mb-6">
               <div 
                 className="flex items-center justify-between p-3 mb-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
@@ -888,7 +987,7 @@ const Settings: React.FC = () => {
                 title={isCustomMappingsCollapsed ? 'Expand custom mappings' : 'Collapse custom mappings'}
               >
                 <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-gray-900">Custom Category Mappings</h3>
+                  <h3 className="font-medium text-gray-900">User Genre Mappings</h3>
                   <svg 
                     className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isCustomMappingsCollapsed ? 'rotate-0' : 'rotate-90'}`} 
                     fill="currentColor" 
@@ -908,10 +1007,10 @@ const Settings: React.FC = () => {
                       <thead className="bg-gray-50">
                         <tr>
                           <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Parent Category
+                            Parent Genre
                           </th>
                           <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Mapped Categories
+                            Mapped Genres
                           </th>
                         </tr>
                       </thead>
@@ -964,7 +1063,7 @@ const Settings: React.FC = () => {
                 title={showDefaultMappings ? 'Hide default mappings' : 'Show default mappings'}
               >
                 <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-gray-900">Default Category Mappings</h3>
+                  <h3 className="font-medium text-gray-900">Default Genre Mappings</h3>
                   <svg 
                     className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${showDefaultMappings ? 'rotate-90' : 'rotate-0'}`} 
                     fill="currentColor" 
@@ -981,10 +1080,10 @@ const Settings: React.FC = () => {
                     <thead className="bg-gray-50">
                       <tr>
                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Parent Category
+                          Parent Genre
                         </th>
                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Mapped Categories
+                          Mapped Genres
                         </th>
                       </tr>
                     </thead>
@@ -1048,15 +1147,15 @@ const Settings: React.FC = () => {
               )}
             </div>
 
-            {/* Ignored Categories */}
+            {/* Ignored Genres */}
             <div>
               <div 
                 className="flex items-center justify-between p-3 mb-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
                 onClick={() => setIsIgnoredCategoriesCollapsed(!isIgnoredCategoriesCollapsed)}
-                title={isIgnoredCategoriesCollapsed ? 'Expand ignored categories' : 'Collapse ignored categories'}
+                title={isIgnoredCategoriesCollapsed ? 'Expand ignored genres' : 'Collapse ignored genres'}
               >
                 <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-gray-900">Ignored Categories</h3>
+                  <h3 className="font-medium text-gray-900">Ignored Genres</h3>
                   <svg 
                     className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isIgnoredCategoriesCollapsed ? 'rotate-0' : 'rotate-90'}`} 
                     fill="currentColor" 
@@ -1069,7 +1168,7 @@ const Settings: React.FC = () => {
 
               {!isIgnoredCategoriesCollapsed && (
                 categorySettings.ignoredCategories.length === 0 ? (
-                  <p className="text-sm text-gray-500 italic p-3">No ignored categories defined.</p>
+                  <p className="text-sm text-gray-500 italic p-3">No ignored genres defined.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2 p-3">
                     {categorySettings.ignoredCategories.sort().map((category) => (

@@ -170,6 +170,7 @@ class GoogleBooksService {
       previewLink: volumeInfo.previewLink || null,
       infoLink: volumeInfo.infoLink || null,
       buyLink: saleInfo.buyLink || null,
+      copyright: volumeInfo.copyrightYear ? `©${volumeInfo.copyrightYear}` : null,
       source: 'google_books',
       rawData: item // Keep original data for debugging
     };

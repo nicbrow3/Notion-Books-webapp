@@ -16,6 +16,7 @@ interface NotionFieldMappingsProps {
   onSaveTempFieldMappings?: () => void;
   onHasUnsavedChanges?: () => boolean;
   showDataValues?: boolean;
+  hideUnsavedChangesIndicator?: boolean;
 }
 
 const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
@@ -32,7 +33,8 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
   onResetTempFieldMappings,
   onSaveTempFieldMappings,
   onHasUnsavedChanges,
-  showDataValues = true
+  showDataValues = true,
+  hideUnsavedChangesIndicator = false
 }) => {
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return 'Unknown';
@@ -100,7 +102,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
           </svg>
         </div>
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          {tempFieldMappings && (
+          {tempFieldMappings && !hideUnsavedChangesIndicator && (
             <>
               {(() => {
                 // Check if temp mappings differ from original settings
@@ -116,7 +118,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               })()}
             </>
           )}
-          {tempFieldMappings && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && (
+          {tempFieldMappings && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && !hideUnsavedChangesIndicator && (
             <button
               onClick={onSaveTempFieldMappings}
               className="text-green-600 hover:text-green-800 hover:bg-green-50 p-1 rounded transition-colors"
@@ -127,7 +129,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               </svg>
             </button>
           )}
-          {tempFieldMappings && onResetTempFieldMappings && (
+          {tempFieldMappings && onResetTempFieldMappings && !hideUnsavedChangesIndicator && (
             <button
               onClick={onResetTempFieldMappings}
               className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-1 rounded transition-colors"
@@ -549,7 +551,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
           )}
 
           {/* Save Changes Notice */}
-          {tempFieldMappings && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && (
+          {tempFieldMappings && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && !hideUnsavedChangesIndicator && (
             <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded text-sm">
               <div className="flex items-start">
                 <svg className="w-4 h-4 mr-2 text-orange-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">

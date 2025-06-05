@@ -3,6 +3,7 @@ export interface CategorySettings {
   categoryMappings: { [key: string]: string }; // Maps similar categories to preferred names
   fieldDefaults: { [fieldName: string]: 'audiobook' | 'original' | number }; // Default sources for each field
   overriddenDefaultMappings?: string[]; // Categories where default mapping should be ignored
+  autoFilterLocations?: boolean; // Automatically filter out location genres
 }
 
 export class CategoryService {
@@ -86,7 +87,8 @@ export class CategoryService {
           ignoredCategories: parsed.ignoredCategories || [],
           categoryMappings: mappings,
           fieldDefaults: parsed.fieldDefaults || {},
-          overriddenDefaultMappings: parsed.overriddenDefaultMappings || []
+          overriddenDefaultMappings: parsed.overriddenDefaultMappings || [],
+          autoFilterLocations: parsed.autoFilterLocations || false
         };
       }
     } catch (error) {
@@ -97,7 +99,8 @@ export class CategoryService {
       ignoredCategories: [],
       categoryMappings: { ...this.DEFAULT_MAPPINGS },
       fieldDefaults: {},
-      overriddenDefaultMappings: []
+      overriddenDefaultMappings: [],
+      autoFilterLocations: false
     };
   }
 
@@ -131,7 +134,8 @@ export class CategoryService {
         categoryMappings: customMappings,
         overriddenDefaults: overriddenDefaults,
         fieldDefaults: settings.fieldDefaults,
-        overriddenDefaultMappings: settings.overriddenDefaultMappings || []
+        overriddenDefaultMappings: settings.overriddenDefaultMappings || [],
+        autoFilterLocations: settings.autoFilterLocations || false
       };
       
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave));
@@ -335,11 +339,25 @@ export class CategoryService {
     const ignored: string[] = [];
     const mapped: { [original: string]: string } = {};
 
+    // Common location-based genres to filter when autoFilterLocations is enabled
+    const locationBasedGenres = [
+      'england', 'london', 'new york', 'paris', 'rome', 'italy', 'japan', 'china', 'france', 
+      'scotland', 'ireland', 'australia', 'united states', 'america', 'california', 'texas',
+      'canada', 'india', 'russia', 'germany', 'spain', 'mexico', 'brazil', 'africa',
+      'asia', 'europe', 'north america', 'south america'
+    ];
+
     splitCategories.forEach(category => {
       const lowerCategory = category.toLowerCase();
       
       // Check if category should be ignored
       if (settings.ignoredCategories.some(ignored => ignored.toLowerCase() === lowerCategory)) {
+        ignored.push(category);
+        return;
+      }
+
+      // Check if category is a location-based genre and should be filtered out
+      if (settings.autoFilterLocations && locationBasedGenres.includes(lowerCategory)) {
         ignored.push(category);
         return;
       }

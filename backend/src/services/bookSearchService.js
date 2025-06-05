@@ -411,61 +411,64 @@ class BookSearchService {
   }
 
   /**
-   * Enhance Google Books data with Open Library information
-   * @param {Object} book - Book data from Google Books
-   * @returns {Promise<Object>} Enhanced book data
+   * Enhance Google Books data with Open Library data
+   * @param {Object} book - Book object from Google Books
+   * @returns {Promise<Object>} Enhanced book
    */
   async enhanceBookWithOpenLibraryData(book) {
     try {
-      // Try to find the book in Open Library using ISBN or title
-      const openLibraryData = await this.searchOpenLibrary(book);
+      console.log(`📚 Enhancing book with Open Library data: "${book.title}"`);
       
-      if (openLibraryData && openLibraryData.first_publish_year) {
-        // Merge categories from both sources
-        const googleCategories = this.splitAndCleanCategories(book.categories || [], true); // Skip splitting initially
-        const openLibrarySubjects = this.splitAndCleanCategories(openLibraryData.subject?.slice(0, 12) || [], true); // Skip splitting initially
-        
-        // Merge and deduplicate categories
-        const mergedCategories = [...new Set([
-          ...googleCategories,
-          ...openLibrarySubjects
-        ])];
-
-        console.log(`📚 Enhanced "${book.title}" with ${openLibrarySubjects.length} Open Library subjects`);
-
-        return {
-          ...book,
-          originalPublishedDate: openLibraryData.first_publish_year.toString(),
-          // Keep the Google Books published date as the edition date
-          editionPublishedDate: book.publishedDate,
-          // Merge categories from both sources
-          categories: mergedCategories,
-          // Add additional Open Library data if available
-          openLibraryKey: openLibraryData.key,
-          openLibraryData: {
-            editionCount: openLibraryData.edition_count,
-            firstPublishYear: openLibraryData.first_publish_year,
-            subjects: openLibrarySubjects,
-            rawSubjects: openLibraryData.subject?.slice(0, 10) || [] // Keep raw for debugging
-          }
-        };
+      const openLibraryBook = await this.searchOpenLibrary(book);
+      
+      if (!openLibraryBook) {
+        console.log(`📚 No Open Library data found for "${book.title}"`);
+        return book;
       }
-
-      // If no Open Library data found, return original book
-      return {
+      
+      console.log(`📚 Found Open Library data for "${book.title}"`);
+      
+      // Create enhanced book object with OL data
+      const enhancedBook = {
         ...book,
-        originalPublishedDate: book.publishedDate, // Fallback to Google Books date
-        editionPublishedDate: book.publishedDate
+        openLibraryKey: openLibraryBook.key || null,
+        openLibraryData: {
+          editionCount: openLibraryBook.edition_count,
+          firstPublishYear: openLibraryBook.first_publish_year,
+          subjects: this.splitAndCleanCategories(openLibraryBook.subject || []),
+          rawSubjects: openLibraryBook.subject || []
+        },
+        originalPublishedDate: openLibraryBook.first_publish_year ? openLibraryBook.first_publish_year.toString() : null
       };
-
+      
+      // If OpenLibrary has copyright data, use it if Google Books doesn't have it
+      if (openLibraryBook.copyright_date && !enhancedBook.copyright) {
+        enhancedBook.copyright = `©${openLibraryBook.copyright_date}`;
+      }
+      
+      // Merge categories/subjects (prefer Google's but add missing ones from OL)
+      const googleCategories = new Set(book.categories || []);
+      const olSubjects = this.splitAndCleanCategories(openLibraryBook.subject || [], true);
+      
+      // Add OL subjects that aren't already in Google categories
+      for (const subject of olSubjects) {
+        // Check if this subject or a similar one is already in Google categories
+        const isDuplicate = Array.from(googleCategories).some(
+          category => category.toLowerCase().includes(subject.toLowerCase()) || 
+                    subject.toLowerCase().includes(category.toLowerCase())
+        );
+        
+        if (!isDuplicate) {
+          googleCategories.add(subject);
+        }
+      }
+      
+      enhancedBook.categories = Array.from(googleCategories);
+      
+      return enhancedBook;
     } catch (error) {
-      console.warn(`⚠️ Failed to enhance book "${book.title}" with Open Library data:`, error.message);
-      // Return original book if enhancement fails
-      return {
-        ...book,
-        originalPublishedDate: book.publishedDate,
-        editionPublishedDate: book.publishedDate
-      };
+      console.warn('⚠️ Error enhancing book with Open Library data:', error.message);
+      return book;
     }
   }
 

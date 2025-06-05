@@ -6,10 +6,10 @@ import { CategoryService } from '../../services/categoryService';
 import SourceBrowser from './SourceBrowser';
 
 export interface FieldSelections {
-  description: 'audiobook' | 'original' | number; // number = edition index
+  description: 'audiobook' | 'original' | 'audiobook_summary' | number; // number = edition index
   publisher: 'audiobook' | 'original' | number;
   pageCount: 'original' | number;
-  publishedDate: 'audiobook' | 'original' | 'first_published' | number;
+  publishedDate: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
   isbn: 'original' | number;
   thumbnail: 'original' | 'audiobook' | number;
 }
@@ -246,6 +246,195 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }));
   };
 
+  // Helper function to check if a date is year-only
+  const isYearOnlyDate = (dateString: string | null | undefined) => {
+    if (!dateString || typeof dateString !== 'string') return false;
+    return /^\d{4}$/.test(dateString.trim());
+  };
+
+  // Helper function to clean audiobook date
+  const cleanAudiobookDate = (dateString: string | null | undefined) => {
+    if (!dateString || typeof dateString !== 'string') return '';
+    return dateString.replace(/T00:00:00\.000Z$/, '');
+  };
+
+  // Helper function to extract year from date string
+  const extractYear = (dateString: string | null | undefined): number | null => {
+    if (!dateString || typeof dateString !== 'string') return null;
+    const yearMatch = dateString.match(/\d{4}/);
+    return yearMatch ? parseInt(yearMatch[0]) : null;
+  };
+
+  // Helper function to check if a source is English
+  const isEnglishSource = (edition: any) => {
+    if (!edition?.language) return true; // Assume English if no language specified
+    const lang = edition.language.toLowerCase();
+    return lang === 'en' || lang === 'eng' || lang === 'english' || lang.startsWith('en');
+  };
+
+  // Helper function to filter editions by language if needed
+  const getFilteredEditions = () => {
+    // Default to true (English-only) unless explicitly set to false
+    if (notionSettings && notionSettings.useEnglishOnlySources === false) {
+      return editions; // No filtering if setting is explicitly disabled
+    }
+    return editions.filter(isEnglishSource);
+  };
+
+  // Helper function to create descriptive edition labels
+  const createEditionLabel = (edition: any, index: number) => {
+    const parts = [];
+    
+    // Add title if different from main book
+    if (edition.title && edition.title !== book.title) {
+      parts.push(edition.title);
+    }
+    
+    // Add year if available
+    if (edition.publishedDate) {
+      const year = edition.publishedDate.match(/\d{4}/)?.[0];
+      if (year) {
+        parts.push(`${year}`);
+      }
+    }
+    
+    // Add publisher if available and helps differentiate
+    if (edition.publisher) {
+      parts.push(edition.publisher);
+    }
+    
+    // Fallback to edition number if we don't have distinguishing info
+    if (parts.length === 0 || (parts.length === 1 && parts[0] === book.title)) {
+      parts.push(`Edition ${index + 1}`);
+    }
+    
+    return parts.join(' • ');
+  };
+
+  // Helper function to find the earliest date among all available sources
+  const findEarliestDateSource = () => {
+    console.log('📅 findEarliestDateSource called');
+    const dateSources: Array<{
+      value: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
+      label: string;
+      dateString: string;
+      year: number;
+    }> = [];
+
+    // Collect all available date sources with their years
+    if (book.copyright && typeof book.copyright === 'string') {
+      const year = extractYear(book.copyright);
+      if (year) {
+        dateSources.push({
+          value: 'copyright',
+          label: 'Copyright',
+          dateString: book.copyright,
+          year
+        });
+      }
+    }
+
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.copyright) {
+      const copyrightStr = typeof book.audiobookData.copyright === 'string' 
+        ? book.audiobookData.copyright 
+        : String(book.audiobookData.copyright);
+      const year = extractYear(copyrightStr);
+      if (year) {
+        dateSources.push({
+          value: 'audiobook_copyright',
+          label: 'Audiobook Copyright',
+          dateString: copyrightStr,
+          year
+        });
+      }
+    }
+
+    if (book.originalPublishedDate && typeof book.originalPublishedDate === 'string') {
+      const year = extractYear(book.originalPublishedDate);
+      if (year) {
+        dateSources.push({
+          value: 'first_published',
+          label: 'First Published',
+          dateString: book.originalPublishedDate,
+          year
+        });
+      }
+    }
+
+    if (book.publishedDate && typeof book.publishedDate === 'string' && book.publishedDate !== book.originalPublishedDate) {
+      const year = extractYear(book.publishedDate);
+      if (year) {
+        dateSources.push({
+          value: 'original',
+          label: 'This Edition',
+          dateString: book.publishedDate,
+          year
+        });
+      }
+    }
+
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.publishedDate && typeof book.audiobookData.publishedDate === 'string') {
+      const cleanDate = cleanAudiobookDate(book.audiobookData.publishedDate);
+      const year = extractYear(cleanDate);
+      if (year && cleanDate) {
+        dateSources.push({
+          value: 'audiobook',
+          label: 'Audiobook',
+          dateString: cleanDate,
+          year
+        });
+      }
+    }
+
+    // Add edition dates
+    getFilteredEditions().forEach((edition, index) => {
+      if (edition.publishedDate) {
+        const year = extractYear(edition.publishedDate);
+        if (year) {
+          const originalIndex = editions.findIndex(e => e.id === edition.id);
+          dateSources.push({
+            value: originalIndex !== -1 ? originalIndex : index,
+            label: createEditionLabel(edition, originalIndex !== -1 ? originalIndex : index),
+            dateString: edition.publishedDate,
+            year
+          });
+        }
+      }
+    });
+
+    if (dateSources.length === 0) {
+      console.log('📅 No date sources found for smart selection');
+      return null;
+    }
+
+    console.log('📅 Found date sources for smart selection:', dateSources.map(d => ({ label: d.label, year: d.year })));
+
+    // Sort by year (earliest first)
+    dateSources.sort((a, b) => a.year - b.year);
+
+    const earliest = dateSources[0];
+    const latest = dateSources[dateSources.length - 1];
+    
+    console.log('📅 Earliest source:', earliest.label, earliest.year);
+    console.log('📅 Latest source:', latest.label, latest.year);
+
+    // If the earliest date is more than a year prior to the latest, use the earliest
+    if (latest.year - earliest.year > 1) {
+      console.log(`📅 Using earliest date (${earliest.year}) as default because it's more than a year prior to latest (${latest.year})`);
+      return earliest.value;
+    }
+
+    // If dates are within the same year or close, prefer audiobook if available
+    const audiobookSource = dateSources.find(source => source.value === 'audiobook');
+    if (audiobookSource && latest.year - earliest.year <= 1) {
+      console.log(`📅 Using audiobook date as default because dates are within the same year range`);
+      return 'audiobook';
+    }
+
+    // Default to the earliest date
+    return earliest.value;
+  };
+
   // Initialize field selections with smart defaults when audiobook/editions load
   useEffect(() => {
     const newSelections = { ...fieldSelections };
@@ -313,47 +502,16 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
         hasChanges = true;
       }
 
-      // Default to audiobook published date if it's earlier than book date (audiobooks never release before physical books)
-      if (book.audiobookData?.hasAudiobook && book.audiobookData.publishedDate && fieldSelections.publishedDate === 'original') {
-        const cleanedAudiobookDate = cleanAudiobookDate(book.audiobookData.publishedDate);
-        const audiobookDate = new Date(cleanedAudiobookDate);
-        
-        // If audiobook date is valid, compare with book dates
-        if (!isNaN(audiobookDate.getTime())) {
-          let shouldUseAudiobookDate = false;
-          
-          // Compare with book's published date
-          if (book.publishedDate) {
-            const bookDate = new Date(book.publishedDate);
-            if (!isNaN(bookDate.getTime()) && audiobookDate < bookDate) {
-              shouldUseAudiobookDate = true;
-            }
-          }
-          
-          // Compare with original published date if no book date match yet
-          if (!shouldUseAudiobookDate && book.originalPublishedDate) {
-            const originalDate = new Date(book.originalPublishedDate);
-            if (!isNaN(originalDate.getTime()) && audiobookDate < originalDate) {
-              shouldUseAudiobookDate = true;
-            }
-          }
-          
-          // If we only have audiobook date and no other dates, use it
-          if (!shouldUseAudiobookDate && !book.publishedDate && !book.originalPublishedDate) {
-            shouldUseAudiobookDate = true;
-          }
-          
-          if (shouldUseAudiobookDate) {
-            newSelections.publishedDate = 'audiobook';
-            hasChanges = true;
-          }
+      // Use smart date selection algorithm to find the best default published date
+      if (fieldSelections.publishedDate === 'original') {
+        console.log('📅 Running smart date selection algorithm');
+        const smartDateSelection = findEarliestDateSource();
+        console.log('📅 Smart date selection result:', smartDateSelection);
+        if (smartDateSelection && smartDateSelection !== 'original') {
+          console.log('📅 Changing default publishedDate to:', smartDateSelection);
+          newSelections.publishedDate = smartDateSelection;
+          hasChanges = true;
         }
-      }
-
-      // Default to first published date if available and different from publishedDate (and no audiobook override)
-      if (!hasChanges && book.originalPublishedDate && book.publishedDate && book.originalPublishedDate !== book.publishedDate && fieldSelections.publishedDate === 'original') {
-        newSelections.publishedDate = 'first_published';
-        hasChanges = true;
       }
     }
 
@@ -362,25 +520,9 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
   }, [book.audiobookData, editions.length, notionSettings?.useEnglishOnlySources]);
 
-  // Helper function to check if a source is English
-  const isEnglishSource = (edition: any) => {
-    if (!edition?.language) return true; // Assume English if no language specified
-    const lang = edition.language.toLowerCase();
-    return lang === 'en' || lang === 'eng' || lang === 'english' || lang.startsWith('en');
-  };
-
-  // Helper function to filter editions by language if needed
-  const getFilteredEditions = () => {
-    // Default to true (English-only) unless explicitly set to false
-    if (notionSettings && notionSettings.useEnglishOnlySources === false) {
-      return editions; // No filtering if setting is explicitly disabled
-    }
-    return editions.filter(isEnglishSource);
-  };
-
   // Get available description sources
   const getDescriptionSources = () => {
-    const sources: Array<{value: 'audiobook' | 'original' | number, label: string, content: string}> = [];
+    const sources: Array<{value: 'audiobook' | 'original' | 'audiobook_summary' | number, label: string, content: string}> = [];
     
     // Original book description
     if (book.description) {
@@ -397,6 +539,15 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
         value: 'audiobook',
         label: 'Audiobook',
         content: book.audiobookData.description
+      });
+    }
+    
+    // Audiobook summary ("About this listen")
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.summary) {
+      sources.push({
+        value: 'audiobook_summary',
+        label: 'About this listen',
+        content: book.audiobookData.summary
       });
     }
 
@@ -497,60 +648,69 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     return sources;
   };
 
-  // Helper function to check if a date is year-only
-  const isYearOnlyDate = (dateString: string) => {
-    return /^\d{4}$/.test(dateString.trim());
-  };
 
-  // Helper function to clean audiobook date
-  const cleanAudiobookDate = (dateString: string) => {
-    return dateString.replace(/T00:00:00\.000Z$/, '');
-  };
-
-  // Helper function to create descriptive edition labels
-  const createEditionLabel = (edition: any, index: number) => {
-    const parts = [];
-    
-    // Add title if different from main book
-    if (edition.title && edition.title !== book.title) {
-      parts.push(edition.title);
-    }
-    
-    // Add year if available
-    if (edition.publishedDate) {
-      const year = edition.publishedDate.match(/\d{4}/)?.[0];
-      if (year) {
-        parts.push(`${year}`);
-      }
-    }
-    
-    // Add publisher if available and helps differentiate
-    if (edition.publisher) {
-      parts.push(edition.publisher);
-    }
-    
-    // Fallback to edition number if we don't have distinguishing info
-    if (parts.length === 0 || (parts.length === 1 && parts[0] === book.title)) {
-      parts.push(`Edition ${index + 1}`);
-    }
-    
-    return parts.join(' • ');
-  };
 
   // Get available published date sources
   const getPublishedDateSources = () => {
-    const sources: Array<{value: 'audiobook' | 'original' | 'first_published' | number, label: string, content: string}> = [];
+    console.log('📅 getPublishedDateSources called with book data:', {
+      copyright: book.copyright,
+      audiobookCopyright: book.audiobookData?.copyright,
+      originalPublishedDate: book.originalPublishedDate,
+      publishedDate: book.publishedDate,
+      audiobookPublishedDate: book.audiobookData?.publishedDate
+    });
+    
+    const sources: Array<{value: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number, label: string, content: string}> = [];
     
     // Collect all potential dates first
     const potentialSources: Array<{
-      value: 'audiobook' | 'original' | 'first_published' | number;
+      value: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
       label: string;
       content: string;
       isYearOnly: boolean;
     }> = [];
     
+    // Copyright date (often the earliest/most accurate)
+    if (book.copyright && typeof book.copyright === 'string') {
+      console.log('📅 Adding book copyright source:', book.copyright);
+      potentialSources.push({
+        value: 'copyright',
+        label: 'Copyright',
+        content: book.copyright,
+        isYearOnly: isYearOnlyDate(book.copyright)
+      });
+    }
+    
+    // Audiobook copyright date
+    console.log('📅 Checking audiobook copyright conditions:', {
+      hasAudiobook: book.audiobookData?.hasAudiobook,
+      hasCopyright: !!book.audiobookData?.copyright,
+      copyrightValue: book.audiobookData?.copyright,
+      copyrightType: typeof book.audiobookData?.copyright
+    });
+    
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.copyright && typeof book.audiobookData.copyright === 'string') {
+      console.log('📅 Adding audiobook copyright source:', book.audiobookData.copyright);
+      potentialSources.push({
+        value: 'audiobook_copyright',
+        label: 'Audiobook Copyright',
+        content: book.audiobookData.copyright,
+        isYearOnly: isYearOnlyDate(book.audiobookData.copyright)
+      });
+    } else if (book.audiobookData?.hasAudiobook && book.audiobookData.copyright) {
+      // Handle case where copyright might be a number instead of string
+      console.log('📅 Audiobook copyright exists but is not a string, converting:', book.audiobookData.copyright);
+      const copyrightStr = String(book.audiobookData.copyright);
+      potentialSources.push({
+        value: 'audiobook_copyright',
+        label: 'Audiobook Copyright',
+        content: copyrightStr,
+        isYearOnly: isYearOnlyDate(copyrightStr)
+      });
+    }
+    
     // First published date (original published date)
-    if (book.originalPublishedDate) {
+    if (book.originalPublishedDate && typeof book.originalPublishedDate === 'string') {
       potentialSources.push({
         value: 'first_published',
         label: 'First Published',
@@ -560,7 +720,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
     
     // This edition published date
-    if (book.publishedDate && book.publishedDate !== book.originalPublishedDate) {
+    if (book.publishedDate && typeof book.publishedDate === 'string' && book.publishedDate !== book.originalPublishedDate) {
       potentialSources.push({
         value: 'original',
         label: 'This Edition',
@@ -570,7 +730,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
 
     // If we only have one date (either publishedDate or originalPublishedDate but not both)
-    if (!book.originalPublishedDate && book.publishedDate) {
+    if (!book.originalPublishedDate && book.publishedDate && typeof book.publishedDate === 'string') {
       potentialSources.push({
         value: 'original',
         label: 'Original Book',
@@ -580,14 +740,16 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
 
     // Audiobook published date
-    if (book.audiobookData?.hasAudiobook && book.audiobookData.publishedDate) {
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.publishedDate && typeof book.audiobookData.publishedDate === 'string') {
       const cleanDate = cleanAudiobookDate(book.audiobookData.publishedDate);
-      potentialSources.push({
-        value: 'audiobook',
-        label: 'Audiobook',
-        content: cleanDate,
-        isYearOnly: isYearOnlyDate(cleanDate)
-      });
+      if (cleanDate) { // Only add if cleanDate is not empty
+        potentialSources.push({
+          value: 'audiobook',
+          label: 'Audiobook',
+          content: cleanDate,
+          isYearOnly: isYearOnlyDate(cleanDate)
+        });
+      }
     }
 
     // Edition published dates
@@ -604,12 +766,36 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       }
     });
 
-    // Filter out year-only dates if we have more specific dates
-    const hasSpecificDates = potentialSources.some(source => !source.isYearOnly);
+    console.log('📅 Potential sources before filtering:', potentialSources.map(s => ({ label: s.label, content: s.content, isYearOnly: s.isYearOnly })));
     
-    const filteredSources = hasSpecificDates 
-      ? potentialSources.filter(source => !source.isYearOnly)
-      : potentialSources; // Keep year-only dates if that's all we have
+    // Smart filtering: only remove year-only dates if they're close to specific dates
+    // Always keep year-only dates that are significantly earlier (more than 2 years)
+    const specificDates = potentialSources.filter(source => !source.isYearOnly);
+    const yearOnlyDates = potentialSources.filter(source => source.isYearOnly);
+    
+    let filteredSources = [...specificDates]; // Start with all specific dates
+    
+    if (specificDates.length > 0 && yearOnlyDates.length > 0) {
+      // Get the earliest year from specific dates
+      const earliestSpecificYear = Math.min(...specificDates.map(source => extractYear(source.content) || 9999));
+      console.log('📅 Earliest specific date year:', earliestSpecificYear);
+      
+      // Keep year-only dates that are significantly earlier (more than 2 years) or if no specific date year found
+      yearOnlyDates.forEach(source => {
+        const year = extractYear(source.content);
+        if (year && (earliestSpecificYear === 9999 || year < earliestSpecificYear - 2)) {
+          console.log(`📅 Keeping year-only date ${year} because it's significantly earlier than ${earliestSpecificYear}`);
+          filteredSources.push(source);
+        } else {
+          console.log(`📅 Filtering out year-only date ${year} because it's too close to specific dates`);
+        }
+      });
+    } else {
+      // If no specific dates, keep all year-only dates
+      filteredSources = potentialSources;
+    }
+      
+    console.log('📅 Filtered sources:', filteredSources.map(s => ({ label: s.label, content: s.content, isYearOnly: s.isYearOnly })));
 
     // Convert to final format
     filteredSources.forEach(source => {
@@ -620,6 +806,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       });
     });
 
+    console.log('📅 Final published date sources:', sources.map(s => ({ label: s.label, content: s.content })));
     return sources;
   };
 
@@ -651,7 +838,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
     
     // Fallback
-    return book.publishedDate || book.originalPublishedDate || '';
+    return book.publishedDate || book.originalPublishedDate || book.copyright || book.audiobookData?.copyright || '';
   };
 
   // Get the selected thumbnail
@@ -799,17 +986,22 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
             />
           </div>
           <div className="text-sm text-gray-700 leading-relaxed">
-            <p 
-              className={`${!isDescriptionExpanded ? 'overflow-hidden' : ''}`}
-              style={!isDescriptionExpanded ? {
-                display: '-webkit-box',
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden'
-              } : {}}
-            >
-              {getSelectedDescription()}
-            </p>
+            {fieldSelections.description === 'audiobook_summary' ? (
+              <div 
+                className={`prose prose-sm max-w-none ${!isDescriptionExpanded ? 'line-clamp-3 max-h-[4.5rem] overflow-hidden' : ''}`}
+                dangerouslySetInnerHTML={{ __html: getSelectedDescription() }}
+              />
+            ) : (
+              <p 
+                className={`${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}
+                style={{
+                  overflow: isDescriptionExpanded ? 'visible' : 'hidden',
+                  maxHeight: isDescriptionExpanded ? 'none' : '4.5rem' // Approximately 3 lines
+                }}
+              >
+                {getSelectedDescription()}
+              </p>
+            )}
             {getSelectedDescription().length > 200 && (
               <button
                 onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
@@ -896,6 +1088,19 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
           <div>
             <span className="font-medium text-gray-900">ISBN-10:</span>
             <p className="text-gray-600 font-mono text-xs">{book.isbn10}</p>
+          </div>
+        )}
+        {book.openLibraryData?.firstPublishYear && (
+          <div>
+            <span className="font-medium text-gray-800">First Published:</span>
+            <p className="text-gray-700">{book.openLibraryData.firstPublishYear}</p>
+          </div>
+        )}
+        
+        {book.copyright && (
+          <div>
+            <span className="font-medium text-gray-800">Copyright:</span>
+            <p className="text-gray-700">{book.copyright}</p>
           </div>
         )}
       </div>

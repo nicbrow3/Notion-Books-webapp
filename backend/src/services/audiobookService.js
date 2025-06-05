@@ -631,6 +631,7 @@ class AudiobookService {
       publisher: book.publisherName,
       description: book.description,
       summary: book.summary,
+      copyright: book.copyright,
       rating: book.rating,
       releaseDate: book.releaseDate,
       publishedDate: book.releaseDate,

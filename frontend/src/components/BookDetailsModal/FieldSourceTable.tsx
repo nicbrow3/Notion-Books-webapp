@@ -189,9 +189,16 @@ const FieldSourceTable = <T extends string | number>({
                           <div className="flex items-start min-h-[4rem]">
                             {typeof source.content === 'string' ? (
                               <div className="w-full overflow-hidden">
-                                <p className="text-sm leading-relaxed line-clamp-3 break-words">
-                                  {source.content}
-                                </p>
+                                {source.label === 'About this listen' ? (
+                                  <div 
+                                    className="prose prose-sm max-w-none line-clamp-3 break-words"
+                                    dangerouslySetInnerHTML={{ __html: source.content }}
+                                  />
+                                ) : (
+                                  <p className="text-sm leading-relaxed line-clamp-3 break-words">
+                                    {source.content}
+                                  </p>
+                                )}
                                 {source.content.length > 150 && (
                                   <p className="text-xs text-gray-500 mt-1">
                                     {source.content.length} characters

@@ -178,6 +178,13 @@ const AudiobookInfoSection: React.FC<AudiobookInfoSectionProps> = ({
               </div>
             )}
 
+            {book.audiobookData?.copyright && (
+              <div>
+                <span className="font-medium text-purple-900">Copyright:</span>
+                <p className="text-purple-700">{book.audiobookData.copyright}</p>
+              </div>
+            )}
+
             {book.audiobookData?.asin && (
               <div>
                 <span className="font-medium text-purple-900">ASIN:</span>

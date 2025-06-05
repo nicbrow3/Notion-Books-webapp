@@ -13,6 +13,8 @@ export interface AudiobookData {
   publisher?: string;
   publishedDate?: string;
   description?: string;
+  summary?: string; // "About this listen" or additional summary content
+  copyright?: string; // Copyright information
   image?: string;
   rating?: number;
   ratingCount?: number;
@@ -81,6 +83,7 @@ export interface Book {
   isbn13?: string;
   language?: string;
   publisher?: string;
+  copyright?: string;
   source?: string;
   rawData?: any;
   
@@ -98,13 +101,11 @@ export interface BookSearchResult {
   authors: string[];
   publisher?: string | null;
   publishedDate?: string | null;
-  originalPublishedDate?: string | null; // Original publication date from Open Library
-  editionPublishedDate?: string | null; // Edition publication date
   description?: string | null;
   isbn13?: string | null;
   isbn10?: string | null;
   pageCount?: number | null;
-  categories: string[];
+  categories?: string[];
   averageRating?: number | null;
   ratingsCount?: number | null;
   language?: string | null;
@@ -113,15 +114,18 @@ export interface BookSearchResult {
   infoLink?: string | null;
   buyLink?: string | null;
   source: string;
-  openLibraryKey?: string; // Open Library work key
+  audiobookData?: AudiobookData;
+  notionPageId?: string;
+  copyright?: string | null;
+  originalPublishedDate?: string | null;
+  firstPublishedDate?: string | null;
+  openLibraryKey?: string | null;
   openLibraryData?: {
     editionCount?: number;
     firstPublishYear?: number;
     subjects?: string[];
     rawSubjects?: string[];
   };
-  audiobookData?: AudiobookData; // Add audiobook information
-  rawData?: any; // Keep original data for debugging
   
   // Google audiobook hints
   googleAudiobookHints?: GoogleAudiobookHints;
