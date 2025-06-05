@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotionSettings } from '../contexts/NotionSettingsContext';
@@ -48,6 +48,9 @@ const Settings: React.FC = () => {
   const [isDefaultMappingsCollapsed, setIsDefaultMappingsCollapsed] = useState(false);
   const [isIgnoredCategoriesCollapsed, setIsIgnoredCategoriesCollapsed] = useState(false);
 
+  // Ref for file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Test API connections on component mount
   useEffect(() => {
     const testConnections = async () => {
@@ -82,6 +85,167 @@ const Settings: React.FC = () => {
     setCategorySettings(settings);
     console.log('Loaded category settings:', settings);
   }, []);
+
+  /**
+   * Exports all application settings to a JSON file
+   * 
+   * The exported file contains:
+   * - Version information
+   * - Timestamp
+   * - Notion integration settings (database, field mappings, preferences)
+   * - Category settings (mappings, ignored categories, defaults)
+   * 
+   * This creates a downloadable file named 'book-tracker-settings-{date}.json'
+   */
+  const handleExportSettings = () => {
+    try {
+      // Collect settings data
+      const exportData = {
+        version: "1.0",
+        timestamp: new Date().toISOString(),
+        notionSettings: {
+          databaseId: selectedDatabase,
+          databaseName: databases.find(db => db.id === selectedDatabase)?.title || "",
+          fieldMappings,
+          usePageIcon,
+          useEnglishOnlySources
+        },
+        categorySettings: CategoryService.loadSettings()
+      };
+      
+      // Create and download file
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const filename = `book-tracker-settings-${new Date().toISOString().slice(0,10)}.json`;
+      
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success("Settings exported successfully");
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error(`Failed to export settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  /**
+   * Imports settings from a JSON file
+   * 
+   * Expected file structure:
+   * {
+   *   "version": "1.0",
+   *   "timestamp": "ISO date string",
+   *   "notionSettings": {
+   *     "databaseId": "string",
+   *     "databaseName": "string",
+   *     "fieldMappings": { [key: string]: string },
+   *     "usePageIcon": boolean,
+   *     "useEnglishOnlySources": boolean
+   *   },
+   *   "categorySettings": {
+   *     "ignoredCategories": string[],
+   *     "categoryMappings": { [key: string]: string },
+   *     "fieldDefaults": { [key: string]: any },
+   *     "overriddenDefaultMappings": string[] // Default mappings that have been explicitly disabled
+   *   }
+   * }
+   * 
+   * @param e - File input change event
+   */
+  const handleImportSettings = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      if (!e.target.files || e.target.files.length === 0) return;
+      
+      const file = e.target.files[0];
+      const fileContents = await file.text();
+      const importData = JSON.parse(fileContents);
+      
+      // Validate structure
+      if (!importData.notionSettings || !importData.categorySettings) {
+        throw new Error("Invalid settings file format");
+      }
+      
+      // Update category settings - use merge strategy
+      const currentCategorySettings = CategoryService.loadSettings();
+      const mergedCategorySettings = {
+        ...currentCategorySettings,
+        // Merge category mappings
+        categoryMappings: {
+          ...currentCategorySettings.categoryMappings,
+          ...importData.categorySettings.categoryMappings
+        },
+        // Merge ignored categories with deduplication
+        ignoredCategories: Array.from(new Set([
+          ...currentCategorySettings.ignoredCategories,
+          ...(importData.categorySettings.ignoredCategories || [])
+        ])),
+        // Merge field defaults
+        fieldDefaults: {
+          ...currentCategorySettings.fieldDefaults,
+          ...(importData.categorySettings.fieldDefaults || {})
+        },
+        // Merge overridden default mappings with deduplication
+        overriddenDefaultMappings: Array.from(new Set([
+          ...(currentCategorySettings.overriddenDefaultMappings || []),
+          ...(importData.categorySettings.overriddenDefaultMappings || [])
+        ]))
+      };
+      
+      CategoryService.saveSettings(mergedCategorySettings);
+      setCategorySettings(mergedCategorySettings);
+      
+      // Update notion settings if connected - use merge strategy for field mappings
+      if (isAuthenticated && importData.notionSettings.databaseId) {
+        // Set database ID from import
+        setSelectedDatabase(importData.notionSettings.databaseId);
+        
+        // Merge field mappings
+        const mergedFieldMappings = {
+          ...fieldMappings,
+          ...(importData.notionSettings.fieldMappings || {})
+        };
+        setFieldMappings(mergedFieldMappings);
+        
+        // Set boolean preferences
+        setUsePageIcon(importData.notionSettings.usePageIcon || false);
+        setUseEnglishOnlySources(importData.notionSettings.useEnglishOnlySources || false);
+        
+        // Save to Notion settings context
+        await saveSettings({
+          databaseId: importData.notionSettings.databaseId,
+          fieldMapping: { 
+            ...mergedFieldMappings,
+            pageIcon: importData.notionSettings.usePageIcon 
+          },
+          defaultValues: {},
+          autoAddBooks: false,
+          useEnglishOnlySources: importData.notionSettings.useEnglishOnlySources,
+        });
+      } else if (!isAuthenticated && importData.notionSettings) {
+        toast.error("Notion settings imported but not applied - please connect to Notion first");
+      }
+      
+      toast.success("Settings imported successfully");
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error(`Failed to import settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      // Reset the file input
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  // Helper to trigger file input click
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
 
   // Get default mappings (work around the private property access)
   const getDefaultMappings = () => {
@@ -213,15 +377,24 @@ const Settings: React.FC = () => {
 
   // Handle overriding a default category mapping
   const handleOverrideDefaultMapping = (fromCategory: string) => {
-    // We need to explicitly save a null/empty mapping to override the default
-    // This ensures it's saved in localStorage and persists across sessions
-    CategoryService.addCategoryMapping(fromCategory, "");
+    // Get current settings
+    const currentSettings = CategoryService.loadSettings();
     
-    // Then immediately remove it to ensure it doesn't appear in the mappings
-    CategoryService.removeCategoryMapping(fromCategory);
+    // Add to list of overridden default mappings
+    const overriddenMappings = currentSettings.overriddenDefaultMappings || [];
+    if (!overriddenMappings.includes(fromCategory)) {
+      overriddenMappings.push(fromCategory);
+    }
     
-    const updatedSettings = CategoryService.loadSettings();
-    setCategorySettings(updatedSettings);
+    // Update settings
+    currentSettings.overriddenDefaultMappings = overriddenMappings;
+    
+    // Save updated settings
+    CategoryService.saveSettings(currentSettings);
+    
+    // Update local state
+    setCategorySettings(CategoryService.loadSettings());
+    
     toast.success(`Overrode default mapping for "${fromCategory}"`);
   };
 
@@ -392,8 +565,46 @@ const Settings: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-600">Configure your database connections and field mappings for book data.</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
+            <p className="text-gray-600">Configure your database connections and field mappings for book data.</p>
+          </div>
+          <div className="flex space-x-3">
+            {/* Hidden file input */}
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              className="hidden" 
+              accept=".json" 
+              onChange={handleImportSettings} 
+            />
+            
+            {/* Import Button */}
+            <button
+              onClick={triggerFileInput}
+              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center"
+              title="Import Settings"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
+              </svg>
+              Import Settings
+            </button>
+            
+            {/* Export Button */}
+            <button
+              onClick={handleExportSettings}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
+              title="Export Settings"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export Settings
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

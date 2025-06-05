@@ -2,6 +2,7 @@ export interface CategorySettings {
   ignoredCategories: string[];
   categoryMappings: { [key: string]: string }; // Maps similar categories to preferred names
   fieldDefaults: { [fieldName: string]: 'audiobook' | 'original' | number }; // Default sources for each field
+  overriddenDefaultMappings?: string[]; // Categories where default mapping should be ignored
 }
 
 export class CategoryService {
@@ -84,7 +85,8 @@ export class CategoryService {
         return {
           ignoredCategories: parsed.ignoredCategories || [],
           categoryMappings: mappings,
-          fieldDefaults: parsed.fieldDefaults || {}
+          fieldDefaults: parsed.fieldDefaults || {},
+          overriddenDefaultMappings: parsed.overriddenDefaultMappings || []
         };
       }
     } catch (error) {
@@ -94,7 +96,8 @@ export class CategoryService {
     return {
       ignoredCategories: [],
       categoryMappings: { ...this.DEFAULT_MAPPINGS },
-      fieldDefaults: {}
+      fieldDefaults: {},
+      overriddenDefaultMappings: []
     };
   }
 
@@ -127,7 +130,8 @@ export class CategoryService {
         ignoredCategories: settings.ignoredCategories,
         categoryMappings: customMappings,
         overriddenDefaults: overriddenDefaults,
-        fieldDefaults: settings.fieldDefaults
+        fieldDefaults: settings.fieldDefaults,
+        overriddenDefaultMappings: settings.overriddenDefaultMappings || []
       };
       
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave));
