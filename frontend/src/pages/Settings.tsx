@@ -6,6 +6,7 @@ import { NotionIntegrationSettings } from '../types/notion';
 import NotionFieldMappings from '../components/BookDetailsModal/NotionFieldMappings';
 import { NotionService } from '../services/notionService';
 import { BookService } from '../services/bookService';
+import { CategoryService, CategorySettings } from '../services/categoryService';
 
 const Settings: React.FC = () => {
   // Use auth context
@@ -36,6 +37,17 @@ const Settings: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   const [openLibraryStatus, setOpenLibraryStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
+  // Category settings state
+  const [categorySettings, setCategorySettings] = useState<CategorySettings>({
+    ignoredCategories: [],
+    categoryMappings: {},
+    fieldDefaults: {}
+  });
+  const [showDefaultMappings, setShowDefaultMappings] = useState(false);
+  const [isCustomMappingsCollapsed, setIsCustomMappingsCollapsed] = useState(false);
+  const [isDefaultMappingsCollapsed, setIsDefaultMappingsCollapsed] = useState(false);
+  const [isIgnoredCategoriesCollapsed, setIsIgnoredCategoriesCollapsed] = useState(false);
+
   // Test API connections on component mount
   useEffect(() => {
     const testConnections = async () => {
@@ -63,6 +75,60 @@ const Settings: React.FC = () => {
 
     testConnections();
   }, []);
+
+  // Load category settings
+  useEffect(() => {
+    const settings = CategoryService.loadSettings();
+    setCategorySettings(settings);
+    console.log('Loaded category settings:', settings);
+  }, []);
+
+  // Get default mappings (work around the private property access)
+  const getDefaultMappings = () => {
+    // Now we can directly use the static method we added
+    return CategoryService.getDefaultMappings();
+  };
+
+  // Check if a mapping is a custom mapping (not a default one or a modified default)
+  const isCustomMapping = (key: string, value: string) => {
+    const defaultMappings = getDefaultMappings();
+    // It's a custom mapping if:
+    // 1. It's not in the default mappings, OR
+    // 2. Its value is different from the default value
+    return !defaultMappings[key] || defaultMappings[key] !== value;
+  };
+
+  // Get all default mappings that haven't been overridden
+  const getNonOverriddenDefaultMappings = () => {
+    const defaultMappings = getDefaultMappings();
+    // Filter out default mappings that aren't in the current settings
+    // (those have been overridden by the user)
+    const result: Record<string, string> = {};
+    Object.entries(defaultMappings).forEach(([key, value]) => {
+      if (key in categorySettings.categoryMappings) {
+        result[key] = value;
+      }
+    });
+    return result;
+  };
+
+  // Group mappings by target category for a more compact display
+  const getGroupedMappings = () => {
+    // Get only custom mappings
+    const customMappings = Object.entries(categorySettings.categoryMappings)
+      .filter(([key, value]) => isCustomMapping(key, value));
+    
+    // Group by target/parent category
+    const grouped: Record<string, string[]> = {};
+    customMappings.forEach(([fromCategory, toCategory]) => {
+      if (!grouped[toCategory]) {
+        grouped[toCategory] = [];
+      }
+      grouped[toCategory].push(fromCategory);
+    });
+    
+    return grouped;
+  };
 
   const handleConnect = async () => {
     try {
@@ -135,6 +201,36 @@ const Settings: React.FC = () => {
     };
 
     await saveSettings(settings);
+  };
+
+  // Handle removing a category mapping
+  const handleRemoveCategoryMapping = (fromCategory: string) => {
+    CategoryService.removeCategoryMapping(fromCategory);
+    const updatedSettings = CategoryService.loadSettings();
+    setCategorySettings(updatedSettings);
+    toast.success(`Removed mapping for "${fromCategory}"`);
+  };
+
+  // Handle overriding a default category mapping
+  const handleOverrideDefaultMapping = (fromCategory: string) => {
+    // We need to explicitly save a null/empty mapping to override the default
+    // This ensures it's saved in localStorage and persists across sessions
+    CategoryService.addCategoryMapping(fromCategory, "");
+    
+    // Then immediately remove it to ensure it doesn't appear in the mappings
+    CategoryService.removeCategoryMapping(fromCategory);
+    
+    const updatedSettings = CategoryService.loadSettings();
+    setCategorySettings(updatedSettings);
+    toast.success(`Overrode default mapping for "${fromCategory}"`);
+  };
+
+  // Handle removing an ignored category
+  const handleRemoveIgnoredCategory = (category: string) => {
+    CategoryService.removeIgnoredCategory(category);
+    const updatedSettings = CategoryService.loadSettings();
+    setCategorySettings(updatedSettings);
+    toast.success(`Removed "${category}" from ignored categories`);
   };
 
   const renderGoogleBooksStatus = () => {
@@ -559,6 +655,231 @@ const Settings: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Category Settings */}
+          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Category Mappings</h2>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600">
+                Category mappings allow you to standardize book categories across different sources. 
+                When a category matches a mapped entry, it will be converted to the preferred name.
+              </p>
+            </div>
+
+            {/* Custom Category Mappings */}
+            <div className="mb-6">
+              <div 
+                className="flex items-center justify-between p-3 mb-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
+                onClick={() => setIsCustomMappingsCollapsed(!isCustomMappingsCollapsed)}
+                title={isCustomMappingsCollapsed ? 'Expand custom mappings' : 'Collapse custom mappings'}
+              >
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-gray-900">Custom Category Mappings</h3>
+                  <svg 
+                    className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isCustomMappingsCollapsed ? 'rotate-0' : 'rotate-90'}`} 
+                    fill="currentColor" 
+                    viewBox="0 0 20 20"
+                  >
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+
+              {!isCustomMappingsCollapsed && (
+                Object.keys(getGroupedMappings()).length === 0 ? (
+                  <p className="text-sm text-gray-500 italic p-3">No custom mappings defined.</p>
+                ) : (
+                  <div className="border border-gray-200 rounded-md overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Parent Category
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Mapped Categories
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {Object.entries(getGroupedMappings())
+                          .sort((a, b) => a[0].localeCompare(b[0]))
+                          .map(([parentCategory, mappedCategories]) => (
+                            <tr key={parentCategory} className="hover:bg-gray-50">
+                              <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {parentCategory}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                <div className="flex flex-wrap gap-2">
+                                  {mappedCategories.sort().map(category => (
+                                    <div 
+                                      key={category} 
+                                      className="flex items-center bg-gray-100 rounded-full px-3 py-1"
+                                    >
+                                      <span className="text-gray-800 mr-2">{category}</span>
+                                      <button
+                                        onClick={() => handleRemoveCategoryMapping(category)}
+                                        className="text-gray-500 hover:text-red-600"
+                                        title={`Remove mapping from "${category}" to "${parentCategory}"`}
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Default Mappings */}
+            <div className="mb-6">
+              <div 
+                className="flex items-center justify-between p-3 mb-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
+                onClick={() => {
+                  setShowDefaultMappings(!showDefaultMappings);
+                  setIsDefaultMappingsCollapsed(false);
+                }}
+                title={showDefaultMappings ? 'Hide default mappings' : 'Show default mappings'}
+              >
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-gray-900">Default Category Mappings</h3>
+                  <svg 
+                    className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${showDefaultMappings ? 'rotate-90' : 'rotate-0'}`} 
+                    fill="currentColor" 
+                    viewBox="0 0 20 20"
+                  >
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+
+              {showDefaultMappings && !isDefaultMappingsCollapsed && (
+                <div className="border border-gray-200 rounded-md overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Parent Category
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Mapped Categories
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {(() => {
+                        // Group default mappings by target category
+                        const defaultMappings = getNonOverriddenDefaultMappings();
+                        const grouped: Record<string, string[]> = {};
+                        
+                        Object.entries(defaultMappings).forEach(([fromCategory, toCategory]) => {
+                          if (!grouped[toCategory]) {
+                            grouped[toCategory] = [];
+                          }
+                          grouped[toCategory].push(fromCategory);
+                        });
+                        
+                        if (Object.keys(grouped).length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={2} className="px-4 py-4 text-center text-sm text-gray-500 italic">
+                                No default mappings available or all have been overridden.
+                              </td>
+                            </tr>
+                          );
+                        }
+                        
+                        return Object.entries(grouped)
+                          .sort((a, b) => a[0].localeCompare(b[0]))
+                          .map(([parentCategory, mappedCategories]) => (
+                            <tr key={parentCategory} className="hover:bg-gray-50">
+                              <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
+                                {parentCategory}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-500">
+                                <div className="flex flex-wrap gap-2">
+                                  {mappedCategories.sort().map(category => (
+                                    <div 
+                                      key={category} 
+                                      className="flex items-center bg-gray-50 rounded-full px-3 py-1 mr-1 mb-1"
+                                    >
+                                      <span className="text-gray-700 mr-2">{category}</span>
+                                      <button
+                                        onClick={() => handleOverrideDefaultMapping(category)}
+                                        className="text-gray-400 hover:text-red-600"
+                                        title={`Override default mapping from "${category}" to "${parentCategory}"`}
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Ignored Categories */}
+            <div>
+              <div 
+                className="flex items-center justify-between p-3 mb-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
+                onClick={() => setIsIgnoredCategoriesCollapsed(!isIgnoredCategoriesCollapsed)}
+                title={isIgnoredCategoriesCollapsed ? 'Expand ignored categories' : 'Collapse ignored categories'}
+              >
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-gray-900">Ignored Categories</h3>
+                  <svg 
+                    className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isIgnoredCategoriesCollapsed ? 'rotate-0' : 'rotate-90'}`} 
+                    fill="currentColor" 
+                    viewBox="0 0 20 20"
+                  >
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+
+              {!isIgnoredCategoriesCollapsed && (
+                categorySettings.ignoredCategories.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic p-3">No ignored categories defined.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 p-3">
+                    {categorySettings.ignoredCategories.sort().map((category) => (
+                      <div key={category} className="flex items-center bg-gray-100 rounded-full px-3 py-1 text-sm">
+                        <span className="text-gray-800 mr-2">{category}</span>
+                        <button
+                          onClick={() => handleRemoveIgnoredCategory(category)}
+                          className="text-gray-500 hover:text-red-600"
+                          title="Remove from ignored"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
         </div>
         
         {/* Right Column - API Connections */}
@@ -635,4 +956,4 @@ const Settings: React.FC = () => {
   );
 };
 
-export default Settings; 
+export default Settings;

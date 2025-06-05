@@ -8,6 +8,7 @@ export class CategoryService {
   private static readonly STORAGE_KEY = 'notion-books-category-settings';
 
   // Default category mappings for common variations
+  // Note: Compound genres like "Science Fiction & Fantasy" will be split before mapping
   private static readonly DEFAULT_MAPPINGS: { [key: string]: string } = {
     'sci-fi': 'Science Fiction',
     'scifi': 'Science Fiction',
@@ -19,7 +20,7 @@ export class CategoryService {
     'ya fiction': 'Young Adult',
     'ya': 'Young Adult',
     'teen fiction': 'Young Adult',
-    'juvenile fiction': 'Children\'s Fiction',
+    'juvenile fiction': 'Young Adult',
     'children\'s books': 'Children\'s Fiction',
     'kids books': 'Children\'s Fiction',
     'mystery & detective': 'Mystery',
@@ -62,9 +63,27 @@ export class CategoryService {
       const stored = localStorage.getItem(this.STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
+        
+        // Start with default mappings
+        const mappings = { ...this.DEFAULT_MAPPINGS };
+        
+        // Apply custom mappings (overriding defaults where applicable)
+        if (parsed.categoryMappings) {
+          Object.entries(parsed.categoryMappings).forEach(([key, value]: [string, any]) => {
+            mappings[key] = value;
+          });
+        }
+        
+        // Remove any default mappings that have been explicitly overridden
+        if (parsed.overriddenDefaults && Array.isArray(parsed.overriddenDefaults)) {
+          parsed.overriddenDefaults.forEach((key: string) => {
+            delete mappings[key];
+          });
+        }
+        
         return {
           ignoredCategories: parsed.ignoredCategories || [],
-          categoryMappings: { ...this.DEFAULT_MAPPINGS, ...(parsed.categoryMappings || {}) },
+          categoryMappings: mappings,
           fieldDefaults: parsed.fieldDefaults || {}
         };
       }
@@ -84,17 +103,30 @@ export class CategoryService {
    */
   static saveSettings(settings: CategorySettings): void {
     try {
-      // Only save custom mappings (not defaults)
+      // We need to track both custom mappings and explicit overrides of default mappings
       const customMappings: { [key: string]: string } = {};
+      const overriddenDefaults: string[] = [];
+      
+      // First, find all explicitly defined mappings (different from defaults)
       Object.entries(settings.categoryMappings).forEach(([key, value]) => {
         if (this.DEFAULT_MAPPINGS[key] !== value) {
+          // This is either a custom mapping or a modified default
           customMappings[key] = value;
+        }
+      });
+      
+      // Now find default mappings that have been removed (they won't be in settings.categoryMappings)
+      Object.keys(this.DEFAULT_MAPPINGS).forEach(key => {
+        if (!(key in settings.categoryMappings)) {
+          // This default mapping has been explicitly removed by the user
+          overriddenDefaults.push(key);
         }
       });
 
       const toSave = {
         ignoredCategories: settings.ignoredCategories,
         categoryMappings: customMappings,
+        overriddenDefaults: overriddenDefaults,
         fieldDefaults: settings.fieldDefaults
       };
       
@@ -115,53 +147,13 @@ export class CategoryService {
       'health & fitness',
       'health & wellness',
       'home & garden',
+      'biography & autobiography',
+      'business & economics',
+      // All other compound genres will be split into their component genres
     ];
     
     categories.forEach(category => {
-      if (category.includes(',')) {
-        // Split by comma and clean each part
-        const parts = category.split(',').map(part => part.trim()).filter(part => part.length > 0);
-        split.push(...parts);
-      } else {
-        // Check if this is a preserved compound genre
-        const isPreservedCompound = preservedCompoundGenres.some(preserved => 
-          category.toLowerCase().includes(preserved)
-        );
-        
-        if (isPreservedCompound) {
-          // Don't split compound genres, just clean them up
-          split.push(category.trim());
-        } else {
-          split.push(category.trim());
-        }
-      }
-    });
-    
-    return split.filter(cat => cat.length > 0);
-  }
-
-  /**
-   * Split comma-separated categories and clean them up, while preserving audiobook genres
-   */
-  static splitCategoriesWithAudiobookPreservation(categories: string[], audiobookGenres: string[] = []): string[] {
-    const split: string[] = [];
-    
-    // Well-known compound genres that should not be split
-    const preservedCompoundGenres = [
-      'health & fitness',
-      'health & wellness',
-      'home & garden',
-    ];
-    
-    // Create a lowercase set of audiobook genres for comparison
-    const audiobookGenresLower = audiobookGenres.map(g => g.toLowerCase());
-    
-    categories.forEach(category => {
-      // Check if this category is an audiobook genre - if so, preserve it intact
-      if (audiobookGenresLower.includes(category.toLowerCase())) {
-        split.push(category.trim());
-        return;
-      }
+      const lowerCategory = category.toLowerCase();
       
       if (category.includes(',')) {
         // Split by comma and clean each part
@@ -170,14 +162,14 @@ export class CategoryService {
       } else {
         // Check if this is a preserved compound genre
         const isPreservedCompound = preservedCompoundGenres.some(preserved => 
-          category.toLowerCase().includes(preserved)
+          lowerCategory === preserved || lowerCategory.includes(preserved)
         );
         
         if (isPreservedCompound) {
           // Don't split compound genres, just clean them up
           split.push(category.trim());
         } else {
-          // Apply standard splitting logic for "&" and " and " but not for audiobook genres
+          // Apply standard splitting logic for "&" and " and "
           let parts = [category];
           
           // Split by ampersand
@@ -198,8 +190,107 @@ export class CategoryService {
             }
           });
           
-          split.push(...finalParts);
+          split.push(...finalParts.filter(part => part.length > 0));
         }
+      }
+    });
+    
+    return split.filter(cat => cat.length > 0);
+  }
+
+  /**
+   * Split comma-separated categories and clean them up, while preserving audiobook genres
+   */
+  static splitCategoriesWithAudiobookPreservation(categories: string[], audiobookGenres: string[] = []): string[] {
+    const split: string[] = [];
+    
+    // Well-known compound genres that should not be split
+    const preservedCompoundGenres = [
+      'health & fitness',
+      'health & wellness',
+      'home & garden',
+      'biography & autobiography',
+      'business & economics',
+      // All other compound genres will be split into their component genres
+    ];
+    
+    // Create a lowercase set of audiobook genres for comparison
+    const audiobookGenresLower = audiobookGenres.map(g => g.toLowerCase());
+    
+    categories.forEach(category => {
+      const lowerCategory = category.toLowerCase();
+      
+      // Check if this is a preserved compound genre that we should never split
+      const isPreservedCompound = preservedCompoundGenres.some(preserved => 
+        lowerCategory === preserved || lowerCategory.includes(preserved)
+      );
+      
+      if (isPreservedCompound) {
+        // Don't split preserved compound genres, just clean them up
+        split.push(category.trim());
+        return;
+      }
+      
+      // Check if this category is an audiobook genre - if so, still apply splitting
+      // This ensures consistency regardless of when genres are loaded
+      if (audiobookGenresLower.includes(lowerCategory)) {
+        // Even for audiobook genres, apply splitting if it contains & or and
+        if (category.includes('&') || category.toLowerCase().includes(' and ')) {
+          let parts = [category];
+          
+          // Split by ampersand
+          if (category.includes('&')) {
+            parts = category.split('&');
+          }
+          
+          // Then split each part by " and " (with spaces to avoid splitting words like "brand")
+          const finalParts: string[] = [];
+          parts.forEach(part => {
+            if (part.toLowerCase().includes(' and ')) {
+              const andParts = part.split(/ and /i) // Case insensitive split
+                .map(p => p.trim())
+                .filter(p => p.length > 0);
+              finalParts.push(...andParts);
+            } else {
+              finalParts.push(part.trim());
+            }
+          });
+          
+          split.push(...finalParts.filter(part => part.length > 0));
+        } else {
+          // For non-compound audiobook genres, preserve as is
+          split.push(category.trim());
+        }
+        return;
+      }
+      
+      if (category.includes(',')) {
+        // Split by comma and clean each part
+        const parts = category.split(',').map(part => part.trim()).filter(part => part.length > 0);
+        split.push(...parts);
+      } else {
+        // Apply standard splitting logic for "&" and " and "
+        let parts = [category];
+        
+        // Split by ampersand
+        if (category.includes('&')) {
+          parts = category.split('&');
+        }
+        
+        // Then split each part by " and " (with spaces to avoid splitting words like "brand")
+        const finalParts: string[] = [];
+        parts.forEach(part => {
+          if (part.toLowerCase().includes(' and ')) {
+            const andParts = part.split(/ and /i) // Case insensitive split
+              .map(p => p.trim())
+              .filter(p => p.length > 0);
+            finalParts.push(...andParts);
+          } else {
+            finalParts.push(part.trim());
+          }
+        });
+        
+        split.push(...finalParts.filter(part => part.length > 0));
       }
     });
     
@@ -227,47 +318,12 @@ export class CategoryService {
         .filter(Boolean) as string[];
         
       if (cleanAudiobookGenres.length > 0) {
-        console.log(`Processing categories with audiobook genre preservation (${cleanAudiobookGenres.length} genres)`);
+        console.log(`Processing categories with audiobook genre splitting (${cleanAudiobookGenres.length} genres)`);
       }
+      // Use the audiobook-aware splitting method, but ensure compound genres still get split
       splitCategories = this.splitCategoriesWithAudiobookPreservation(categories, cleanAudiobookGenres);
-    } else if (audiobookData && 
-               (audiobookData.hasAudiobook === false || 
-                audiobookData.source === 'error' ||
-                (audiobookData.hasAudiobook === true && (!audiobookData.genres || audiobookData.genres.length === 0)))) {
-      // We confirmed audiobook status (no audiobook, error, or audiobook with no genres) - safe to split normally
-      // Reduced logging frequency - only log once per book
-      splitCategories = this.splitCategories(categories);
-      
-      // Apply standard splitting logic for "&" and " and "
-      const furtherSplit: string[] = [];
-      splitCategories.forEach(category => {
-        let parts = [category];
-        
-        // Split by ampersand
-        if (category.includes('&')) {
-          parts = category.split('&');
-        }
-        
-        // Then split each part by " and " (with spaces to avoid splitting words like "brand")
-        const finalParts: string[] = [];
-        parts.forEach(part => {
-          if (part.toLowerCase().includes(' and ')) {
-            const andParts = part.split(/ and /i) // Case insensitive split
-              .map(p => p.trim())
-              .filter(p => p.length > 0);
-            finalParts.push(...andParts);
-          } else {
-            finalParts.push(part.trim());
-          }
-        });
-        
-        furtherSplit.push(...finalParts);
-      });
-      
-      splitCategories = furtherSplit.filter(cat => cat.length > 0);
     } else {
-      // No audiobook data yet, don't split anything with & or "and" to preserve compound genres
-      // Reduced logging - only log when actually preserving compound categories
+      // For all other cases, use the standard splitting method
       splitCategories = this.splitCategories(categories);
     }
     
@@ -390,6 +446,28 @@ export class CategoryService {
   }
 
   /**
+   * Get default mappings for UI display
+   */
+  static getDefaultMappings(): { [key: string]: string } {
+    return { ...this.DEFAULT_MAPPINGS };
+  }
+
+  /**
+   * Check if a mapping is from the default mappings
+   */
+  static isDefaultMapping(key: string): boolean {
+    return key in this.DEFAULT_MAPPINGS;
+  }
+
+  /**
+   * Check if a default mapping has been overridden (removed by the user)
+   */
+  static isDefaultMappingOverridden(key: string): boolean {
+    const settings = this.loadSettings();
+    return this.isDefaultMapping(key) && !(key in settings.categoryMappings);
+  }
+
+  /**
    * Remove all mappings for a specific target category
    */
   static removeAllMappingsTo(targetCategory: string): string[] {
@@ -443,6 +521,23 @@ export class CategoryService {
     
     // Don't consider categories similar if they're identical
     if (norm1 === norm2) return false;
+    
+    // Explicitly prevent certain categories from being considered similar
+    const mutuallyDistinctPairs = [
+      ['action', 'adventure'],
+      ['science', 'fiction'],
+      ['fantasy', 'magic'],
+      ['mystery', 'thriller'],
+      ['horror', 'thriller']
+    ];
+    
+    for (const [a, b] of mutuallyDistinctPairs) {
+      if ((norm1 === a && norm2 === b) || (norm1 === b && norm2 === a) ||
+          (norm1 === a && norm2.includes(b)) || (norm1 === b && norm2.includes(a)) ||
+          (norm2 === a && norm1.includes(b)) || (norm2 === b && norm1.includes(a))) {
+        return false;
+      }
+    }
     
     // Don't merge geographical categories with non-geographical ones
     if (this.isGeographicalCategory(cat1) !== this.isGeographicalCategory(cat2)) {

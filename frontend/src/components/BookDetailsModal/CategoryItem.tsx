@@ -33,6 +33,11 @@ const CategoryItem: React.FC<CategoryItemProps> = ({
   onManualMapping,
   onUnmap
 }) => {
+  const [showTooltip, setShowTooltip] = React.useState(false);
+  
+  const hasSubcategories = category.mappedToThis && category.mappedToThis.length > 0;
+  const subcategoryCount = hasSubcategories ? category.mappedToThis!.length : 0;
+
   return (
     <div
       className={`flex items-center justify-between p-3 rounded border transition-colors ${
@@ -45,7 +50,8 @@ const CategoryItem: React.FC<CategoryItemProps> = ({
         if (!category.isIgnored && 
             !target.closest('button') && 
             !target.closest('input') && 
-            !target.closest('a')) {
+            !target.closest('a') &&
+            !target.closest('.subcategory-count')) {
           onToggle();
         }
       }}
@@ -65,6 +71,33 @@ const CategoryItem: React.FC<CategoryItemProps> = ({
             <span className={`text-sm ${category.isIgnored ? 'text-red-600 line-through' : 'text-gray-700'}`}>
               {category.processed}
             </span>
+            
+            {/* Show subcategory count badge for parent categories */}
+            {hasSubcategories && !category.isIgnored && (
+              <div className="relative">
+                <div 
+                  className="subcategory-count inline-flex items-center justify-center w-5 h-5 bg-purple-100 text-purple-800 text-xs font-medium rounded-full cursor-pointer"
+                  onMouseEnter={() => setShowTooltip(true)}
+                  onMouseLeave={() => setShowTooltip(false)}
+                >
+                  {subcategoryCount}
+                </div>
+                
+                {/* Tooltip showing subcategories */}
+                {showTooltip && (
+                  <div className="absolute z-10 w-48 p-2 mt-1 text-xs bg-white rounded-md shadow-lg border border-gray-200">
+                    <div className="font-medium text-purple-800 mb-1">
+                      Subcategories:
+                    </div>
+                    <ul className="list-disc pl-4 text-gray-700 space-y-1">
+                      {category.mappedToThis!.map((subcategory, idx) => (
+                        <li key={idx}>{subcategory}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
             
             {category.isMapped && !category.isIgnored && (
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
@@ -115,12 +148,6 @@ const CategoryItem: React.FC<CategoryItemProps> = ({
           {category.isMapped && category.mappedFrom && (
             <div className="text-xs text-gray-500 mt-1">
               Originally: "{category.mappedFrom}"
-            </div>
-          )}
-          
-          {category.mappedToThis && category.mappedToThis.length > 0 && (
-            <div className="text-xs text-purple-600 mt-1">
-              <span className="font-medium">Mapped from:</span> {category.mappedToThis.join(', ')}
             </div>
           )}
           

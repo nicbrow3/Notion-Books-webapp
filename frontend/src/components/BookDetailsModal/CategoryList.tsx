@@ -34,6 +34,11 @@ const CategoryList: React.FC<CategoryListProps> = ({
   onManualMapping,
   onUnmapCategory
 }) => {
+  // Count categories with subcategories
+  const parentCategoriesCount = processedCategories.filter(
+    cat => cat.mappedToThis && cat.mappedToThis.length > 0
+  ).length;
+
   return (
     <>
       {/* Categories List */}
@@ -77,8 +82,8 @@ const CategoryList: React.FC<CategoryListProps> = ({
               <span className="ml-1 text-gray-600">{processedCategories.filter(cat => cat.isIgnored).length}</span>
             </div>
             <div>
-              <span className="font-medium text-gray-700">Mapped:</span>
-              <span className="ml-1 text-gray-600">{processedCategories.filter(cat => cat.isMapped).length}</span>
+              <span className="font-medium text-gray-700">Parent Categories:</span>
+              <span className="ml-1 text-gray-600">{parentCategoriesCount}</span>
             </div>
           </div>
           
@@ -147,29 +152,6 @@ const CategoryList: React.FC<CategoryListProps> = ({
                     <span key={idx} className="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">
                       {cat.mappedFrom} → {cat.processed}
                     </span>
-                  ))}
-              </div>
-            </div>
-          )}
-          
-          {processedCategories.some(cat => cat.mappedToThis && cat.mappedToThis.length > 0) && (
-            <div className="mt-2 pt-2 border-t border-gray-300">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-purple-700">
-                  Parent categories in this book:
-                </span>
-                <span className="text-purple-600 text-xs">
-                  (categories with children mapped to them)
-                </span>
-              </div>
-              <div className="mt-1 space-y-1">
-                {processedCategories
-                  .filter(cat => cat.mappedToThis && cat.mappedToThis.length > 0)
-                  .map((cat, idx) => (
-                    <div key={idx} className="text-xs">
-                      <span className="font-medium text-purple-800">{cat.processed}:</span>
-                      <span className="ml-1 text-purple-600">{cat.mappedToThis!.join(', ')}</span>
-                    </div>
                   ))}
               </div>
             </div>

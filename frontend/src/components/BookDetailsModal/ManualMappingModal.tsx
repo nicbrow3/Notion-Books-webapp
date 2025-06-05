@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 interface ProcessedCategory {
   original: string;
@@ -32,12 +33,15 @@ const ManualMappingModal: React.FC<ManualMappingModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  return (
+  // Create modal content
+  const modalContent = (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
+      onClick={onClose}
+      style={{ isolation: 'isolate' }}
     >
       <div 
-        className="bg-white rounded-lg max-w-md w-full p-6"
+        className="bg-white rounded-lg max-w-md w-full p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -128,6 +132,12 @@ const ManualMappingModal: React.FC<ManualMappingModalProps> = ({
         </div>
       </div>
     </div>
+  );
+
+  // Use createPortal to render the modal at the root level of the DOM
+  return createPortal(
+    modalContent,
+    document.body
   );
 };
 
