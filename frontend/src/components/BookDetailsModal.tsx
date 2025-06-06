@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
+import './BookDetailsModal/transitions.css';
 import { BookSearchResult, BookEdition, BookEditionsResponse } from '../types/book';
 import { NotionService } from '../services/notionService';
 import { BookService } from '../services/bookService';
@@ -8,7 +9,9 @@ import { CategoryService, CategorySettings } from '../services/categoryService';
 import AudiobookSelectionModal from './AudiobookSelectionModal';
 import {
   BookInfoPanel,
-  CategoriesManagementPanel,
+  CategoriesModal,
+  BookDataTable,
+  FieldSourceSelectionModal,
   ManualMappingModal,
   DuplicateBookModal,
   SuccessModal
@@ -81,7 +84,61 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   const [fieldSelections, setFieldSelections] = useState<FieldSelections | null>(null);
   const [selectedFieldData, setSelectedFieldData] = useState<any>(null);
 
+  // New modal states for the refactored UI
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
+  const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+
   const preserveSelectionsRef = useRef<boolean>(false);
+
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return ''; // Return empty string for falsy dates
+    
+    try {
+      // Remove time portion if present (T00:00:00.000Z)
+      const cleanDate = dateString.split('T')[0];
+      
+      // Check if it's just a year (4 digits) - show only the year
+      if (/^\d{4}$/.test(cleanDate.trim())) {
+        return cleanDate.trim();
+      }
+      
+      // Check if it's in YYYY-MM-DD format to avoid timezone issues
+      const isoDateMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (isoDateMatch) {
+        const [, year, month, day] = isoDateMatch;
+        // Use UTC to prevent the date from shifting due to timezone differences
+        const date = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: '2-digit',
+          timeZone: 'UTC'
+        });
+      }
+      
+      // Try to parse the full date from original string to preserve timezone if available
+      const date = new Date(dateString);
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        // If invalid date but contains a year, extract and use just the year
+        const yearMatch = cleanDate.match(/\d{4}/);
+        if (yearMatch) {
+          return yearMatch[0];
+        }
+        return dateString; // Return original if we can't parse anything
+      }
+      
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: '2-digit'
+      });
+    } catch {
+      return dateString;
+    }
+  };
 
   // Handler for "Add another book" button
   const handleAddAnotherBook = () => {
@@ -1149,6 +1206,177 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     console.log('Field selections updated');
   };
 
+  // Handler for opening source selection modal
+  const handleSelectSource = (fieldId: string) => {
+    setEditingField(fieldId);
+    setIsSourceModalOpen(true);
+  };
+
+  // Handler for source selection
+  const handleSourceSelected = (value: string | number) => {
+    if (editingField) {
+      // Update field selections based on the chosen source
+      console.log(`Selected source "${value}" for field "${editingField}"`);
+      
+      // Update the fieldSelections state
+      setFieldSelections(prev => {
+        const current = prev || {} as any;
+        const newSelections = {
+          ...current,
+          [editingField]: value
+        };
+        
+        // Immediately notify of changes with updated selected data
+        const getUpdatedSelectedData = () => {
+          const selectedData: any = {};
+          
+          // Get data for each field based on the new selections
+          Object.keys(newSelections).forEach(fieldKey => {
+            const selection = newSelections[fieldKey];
+            
+            if (fieldKey === 'thumbnail') {
+              if (selection === 'audiobook' && currentBook.audiobookData?.image) {
+                selectedData.thumbnail = currentBook.audiobookData.image;
+              } else if (typeof selection === 'number' && editions && editions[selection]?.thumbnail) {
+                selectedData.thumbnail = editions[selection].thumbnail;
+              } else {
+                selectedData.thumbnail = currentBook.thumbnail;
+              }
+            }
+            // Add handling for other fields as needed
+            else if (fieldKey === 'description') {
+              if (selection === 'audiobook' && currentBook.audiobookData?.description) {
+                selectedData.description = currentBook.audiobookData.description;
+              } else if (selection === 'audiobook_summary' && currentBook.audiobookData?.summary) {
+                selectedData.description = currentBook.audiobookData.summary;
+              } else if (typeof selection === 'number' && editions && editions[selection]?.description) {
+                selectedData.description = editions[selection].description;
+              } else {
+                selectedData.description = currentBook.description;
+              }
+            }
+            else if (fieldKey === 'publisher') {
+              if (selection === 'audiobook' && currentBook.audiobookData?.publisher) {
+                selectedData.publisher = currentBook.audiobookData.publisher;
+              } else if (typeof selection === 'number' && editions && editions[selection]?.publisher) {
+                selectedData.publisher = editions[selection].publisher;
+              } else {
+                selectedData.publisher = currentBook.publisher;
+              }
+            }
+            else if (fieldKey === 'publishedDate') {
+              if (selection === 'audiobook' && currentBook.audiobookData?.publishedDate) {
+                selectedData.publishedDate = currentBook.audiobookData.publishedDate;
+              } else if (typeof selection === 'number' && editions && editions[selection]?.publishedDate) {
+                selectedData.publishedDate = editions[selection].publishedDate;
+              } else {
+                selectedData.publishedDate = currentBook.publishedDate;
+              }
+            }
+            else if (fieldKey === 'pageCount') {
+              if (typeof selection === 'number' && editions && editions[selection]?.pageCount) {
+                selectedData.pageCount = editions[selection].pageCount;
+              } else {
+                selectedData.pageCount = currentBook.pageCount;
+              }
+            }
+            // Add other field types as needed
+          });
+          
+          return selectedData;
+        };
+        
+        const updatedSelectedData = getUpdatedSelectedData();
+        setSelectedFieldData(updatedSelectedData);
+        
+        return newSelections;
+      });
+      
+      // For now, let's also show a toast to confirm the action
+      toast.success(`Updated ${editingField} to use ${value} source`);
+    }
+    setIsSourceModalOpen(false);
+    setEditingField(null);
+  };
+
+  // Helper function to get sources for a specific field
+  const getFieldSources = (fieldId: string) => {
+    const sources = [];
+    
+         // Always add main book source if it has data
+     const getMainValue = (field: string): string | null => {
+       switch (field) {
+         case 'title': return currentBook.title || null;
+         case 'description': return currentBook.description || null;
+         case 'publisher': return currentBook.publisher || null;
+         case 'publishedDate': return currentBook.publishedDate || null;
+         case 'pageCount': return currentBook.pageCount?.toString() || null;
+         case 'thumbnail': return currentBook.thumbnail || null;
+         default: return null;
+       }
+     };
+
+     const mainValue = getMainValue(fieldId);
+     if (mainValue) {
+       sources.push({
+         value: 'original', // Use 'original' to match BookInfoPanel
+         label: 'Original Book',
+         content: mainValue
+       });
+     }
+
+         // Add edition sources if available
+     if (editions && editions.length > 0) {
+                editions.forEach((edition, index) => {
+         let editionValue: string | null = null;
+         switch (fieldId) {
+           case 'title': editionValue = edition.title || null; break;
+           case 'publisher': editionValue = edition.publisher || null; break;
+           case 'publishedDate': editionValue = edition.publishedDate || null; break;
+           case 'pageCount': editionValue = edition.pageCount?.toString() || null; break;
+           case 'description': editionValue = edition.description || null; break;
+           case 'thumbnail': editionValue = edition.thumbnail || null; break;
+         }
+         
+         if (editionValue && editionValue !== mainValue) {
+           sources.push({
+             value: index, // Use index number to match BookInfoPanel
+             label: `Edition ${index + 1} (${edition.publishedDate || 'Unknown year'})`,
+             content: editionValue
+           });
+         }
+       });
+     }
+
+    // Add audiobook sources if available
+    if (currentBook.audiobookData) {
+      let audiobookValue: string | null = null;
+      switch (fieldId) {
+        case 'description': audiobookValue = currentBook.audiobookData.description || null; break;
+        case 'thumbnail': audiobookValue = currentBook.audiobookData.image || null; break;
+      }
+      
+      if (audiobookValue && audiobookValue !== mainValue) {
+        sources.push({
+          value: 'audiobook',
+          label: fieldId === 'thumbnail' ? 'Audiobook Cover' : 'Audiobook',
+          content: audiobookValue
+        });
+      }
+      
+      // Add audiobook summary as separate source for description
+      if (fieldId === 'description' && currentBook.audiobookData.summary && currentBook.audiobookData.summary !== mainValue && currentBook.audiobookData.summary !== audiobookValue) {
+        sources.push({
+          value: 'audiobook_summary',
+          label: 'Audiobook Summary',
+          content: currentBook.audiobookData.summary
+        });
+      }
+    }
+
+    return sources;
+  };
+
   // Get final book data with user's field selections applied
   const getFinalBookData = () => {
     if (!selectedFieldData) {
@@ -1193,14 +1421,14 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       onClick={(e) => {
         e.stopPropagation();
         onClose();
       }}
     >
       <div 
-        className="bg-white rounded-lg max-w-6xl w-full max-h-[95vh] overflow-hidden"
+        className="modal-enter-active bg-white rounded-lg max-w-6xl w-full max-h-[95vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -1226,53 +1454,184 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex h-[calc(95vh-120px)]">
-          {/* Left Panel - Book Information */}
-          <BookInfoPanel
-            book={currentBook}
-            editions={editions}
-            loadingEditions={loadingEditions}
-            loadingAudiobook={loadingAudiobook}
-            notionSettings={notionSettings}
-            onOpenAudiobookSearch={openAudiobookSearch}
-            onSelectEdition={handleSelectEdition}
-            onFieldSelectionChange={handleFieldSelectionChange}
-          />
+        <div className="p-6 overflow-y-auto h-[calc(95vh-200px)]">
+          {/* Book Header Section */}
+          <div className="flex items-start gap-6 mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+            {/* Large Cover Image */}
+            <div className="flex-shrink-0">
+              {getFinalBookData().thumbnail ? (
+                <div 
+                  className={`relative group cursor-pointer h-36 transition-all duration-300 ${
+                    fieldSelections?.thumbnail === 'audiobook' ? 'w-36' : 'w-24'
+                  }`}
+                  onClick={() => handleSelectSource('thumbnail')}
+                  title="Select cover image source"
+                >
+                  <img 
+                    src={getFinalBookData().thumbnail} 
+                    alt={`Cover of ${getFinalBookData().title}`}
+                    className={`w-full h-full rounded-lg shadow-md group-hover:opacity-90 transition-opacity ${
+                      fieldSelections?.thumbnail === 'audiobook' ? 'object-contain bg-gray-100' : 'object-cover'
+                    }`}
+                    onError={(e) => {
+                      // Show placeholder on error
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const placeholder = target.nextElementSibling as HTMLElement;
+                      if (placeholder) placeholder.style.display = 'flex';
+                    }}
+                  />
+                   <div className="absolute inset-0 bg-gradient-to-b from-blue-400 to-blue-600 rounded-lg hidden flex-col items-center justify-center shadow-md">
+                     <svg className="w-8 h-8 text-white mb-2" fill="currentColor" viewBox="0 0 20 20">
+                       <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14zM19 12h2a1 1 0 010 2h-2v2a1 1 0 01-2 0v-2h-2a1 1 0 010-2h2v-2a1 1 0 012 0v2z" />
+                     </svg>
+                     <span className="text-xs text-white text-center px-1">No Cover</span>
+                   </div>
+                </div>
+              ) : (
+                 <div className="w-24 h-36 bg-gradient-to-b from-blue-400 to-blue-600 rounded-lg flex flex-col items-center justify-center shadow-md">
+                   <svg className="w-8 h-8 text-white mb-2" fill="currentColor" viewBox="0 0 20 20">
+                     <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14zM19 12h2a1 1 0 010 2h-2v2a1 1 0 01-2 0v-2h-2a1 1 0 010-2h2v-2a1 1 0 012 0v2z" />
+                   </svg>
+                   <span className="text-xs text-white text-center px-1">No Cover</span>
+                 </div>
+               )}
+            </div>
 
-          {/* Right Panel - Categories Management */}
-          <CategoriesManagementPanel
+            {/* Book Information */}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-xl font-bold text-gray-900 mb-2 leading-tight">
+                {getFinalBookData().title}
+              </h3>
+              {getFinalBookData().authors && getFinalBookData().authors.length > 0 && (
+                <p className="text-lg text-gray-600 mb-3">
+                  by {getFinalBookData().authors.join(', ')}
+                </p>
+              )}
+              
+              {/* Quick Stats */}
+              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                {getFinalBookData().publishedDate && (
+                  <span className="flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                    </svg>
+                    {formatDate(getFinalBookData().publishedDate)}
+                  </span>
+                )}
+                {getFinalBookData().pageCount && (
+                  <span className="flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                    </svg>
+                    {getFinalBookData().pageCount} pages
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Action Bar */}
+          <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setIsCategoriesModalOpen(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                </svg>
+                Manage Categories ({selectedCategories.length} selected)
+              </button>
+              
+              
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Duplicate status indicator */}
+              {duplicateStatus === 'checking' && (
+                <div className="flex items-center text-blue-600 text-sm">
+                  <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Checking for duplicates...
+                </div>
+              )}
+              
+              {duplicateStatus === 'duplicate' && existingNotionPage && (
+                <div className="text-amber-600 text-sm font-medium">
+                  Duplicate found
+                </div>
+              )}
+              
+              {duplicateStatus === 'unique' && (
+                <div className="text-green-600 text-sm font-medium">
+                  No duplicates found
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Main Book Data Table */}
+          <BookDataTable
             book={currentBook}
-            processedCategories={processedCategories}
             selectedCategories={selectedCategories}
-            categorySettings={categorySettings}
-            isCategoriesSectionCollapsed={isCategoriesSectionCollapsed}
-            isNotionMappingsCollapsed={isNotionMappingsCollapsed}
-            showSimilarCategories={showSimilarCategories}
-            duplicateStatus={duplicateStatus}
-            existingNotionPage={existingNotionPage}
-            isAddingToNotion={isAddingToNotion}
-            isNotionConnected={isNotionConnected}
             notionSettings={notionSettings}
             tempFieldMappings={tempFieldMappings}
             databaseProperties={databaseProperties}
             loadingDatabaseProperties={loadingDatabaseProperties}
-            onToggleCategory={toggleCategory}
-            onSelectAllCategories={selectAllCategories}
-            onDeselectAllCategories={deselectAllCategories}
-            onSetCategoriesSectionCollapsed={setIsCategoriesSectionCollapsed}
-            onSetNotionMappingsCollapsed={setIsNotionMappingsCollapsed}
-            onIgnoreCategory={handleIgnoreCategory}
-            onUnignoreCategory={handleUnignoreCategory}
-            onMergeCategories={handleMergeCategories}
-            onManualMapping={handleManualMapping}
-            onUnmapCategory={handleUnmapCategory}
-            onCheckForDuplicates={checkForDuplicates}
-            onAddToNotion={addToNotion}
+            onSelectSource={handleSelectSource}
             onTempFieldMappingChange={handleTempFieldMappingChange}
-            onResetTempFieldMappings={resetTempFieldMappings}
-            onSaveTempFieldMappings={saveTempFieldMappings}
-            onHasUnsavedChanges={hasUnsavedChanges}
+            fieldSelections={fieldSelections}
+            editions={editions}
+            audiobookData={currentBook.audiobookData}
+            openAudiobookSearch={openAudiobookSearch}
+            loadingAudiobook={loadingAudiobook}
           />
+        </div>
+
+        {/* Footer with Notion Actions */}
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              {selectedCategories.length} categories selected
+            </div>
+            <div className="flex items-center gap-3">
+              {isNotionConnected ? (
+                <>
+                  <button
+                    onClick={checkForDuplicates}
+                    disabled={duplicateStatus === 'checking'}
+                    className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Check for Duplicates
+                  </button>
+                  <button
+                    onClick={addToNotion}
+                    disabled={isAddingToNotion || selectedCategories.length === 0}
+                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isAddingToNotion ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Adding to Notion...
+                      </>
+                    ) : (
+                      'Add to Notion'
+                    )}
+                  </button>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500">
+                  Connect to Notion in Settings to add books
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div> {/* End of bg-white rounded-lg modal container */}
 
@@ -1325,6 +1684,58 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           dateType={successModalData.dateType}
           actionType={successModalData.actionType}
           onAddAnotherBook={handleAddAnotherBook}
+        />
+      )}
+
+      {/* Categories Management Modal */}
+      <CategoriesModal
+        isOpen={isCategoriesModalOpen}
+        onClose={() => setIsCategoriesModalOpen(false)}
+        book={currentBook}
+        processedCategories={processedCategories}
+        selectedCategories={selectedCategories}
+        categorySettings={categorySettings}
+        showSimilarCategories={showSimilarCategories}
+        onToggleCategory={toggleCategory}
+        onSelectAllCategories={selectAllCategories}
+        onDeselectAllCategories={deselectAllCategories}
+        onIgnoreCategory={handleIgnoreCategory}
+        onUnignoreCategory={handleUnignoreCategory}
+        onMergeCategories={handleMergeCategories}
+        onManualMapping={handleManualMapping}
+        onUnmapCategory={handleUnmapCategory}
+      />
+
+      {/* Field Source Selection Modal */}
+      {isSourceModalOpen && editingField && (
+        <FieldSourceSelectionModal<string | number>
+          isOpen={isSourceModalOpen}
+          onClose={() => setIsSourceModalOpen(false)}
+          fieldName={editingField}
+          sources={getFieldSources(editingField)}
+          selectedValue={(() => {
+            // Get the current selection for this field
+            if (fieldSelections) {
+              switch (editingField) {
+                case 'description':
+                  return fieldSelections.description || 'original';
+                case 'publisher':
+                  return fieldSelections.publisher || 'original';
+                case 'pageCount':
+                  return fieldSelections.pageCount || 'original';
+                case 'publishedDate':
+                  return fieldSelections.publishedDate || 'original';
+                case 'isbn':
+                  return fieldSelections.isbn || 'original';
+                case 'thumbnail':
+                  return fieldSelections.thumbnail || 'original';
+                default:
+                  return 'original';
+              }
+            }
+            return 'original';
+          })()}
+          onSelect={handleSourceSelected}
         />
       )}
     </div>

@@ -37,7 +37,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
   hideUnsavedChangesIndicator = false
 }) => {
   const formatDate = (dateString?: string | null) => {
-    if (!dateString) return 'Unknown';
+    if (!dateString) return ''; // Return empty string for falsy dates
     
     try {
       // Remove time portion if present (T00:00:00.000Z)
@@ -45,39 +45,40 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
       
       // Check if it's just a year (4 digits) - show only the year
       if (/^\d{4}$/.test(cleanDate.trim())) {
-        return cleanDate.trim(); // Just show "2023" instead of "January 1, 2023"
+        return cleanDate.trim();
       }
       
       // Check if it's in YYYY-MM-DD format to avoid timezone issues
       const isoDateMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (isoDateMatch) {
         const [, year, month, day] = isoDateMatch;
-        // Create date with explicit components to avoid timezone parsing issues
-        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        // Use UTC to prevent the date from shifting due to timezone differences
+        const date = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
         return date.toLocaleDateString('en-US', { 
           year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
+          month: 'short', 
+          day: '2-digit',
+          timeZone: 'UTC'
         });
       }
       
-      // Try to parse the full date
-      const date = new Date(cleanDate);
+      // Try to parse the full date from original string to preserve timezone if available
+      const date = new Date(dateString);
       
       // Check if the date is valid
       if (isNaN(date.getTime())) {
         // If invalid date but contains a year, extract and use just the year
         const yearMatch = cleanDate.match(/\d{4}/);
         if (yearMatch) {
-          return yearMatch[0]; // Just show the year
+          return yearMatch[0];
         }
-        return cleanDate; // Return original if we can't parse anything
+        return dateString; // Return original if we can't parse anything
       }
       
       return date.toLocaleDateString('en-US', { 
         year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+        month: 'short', 
+        day: '2-digit'
       });
     } catch {
       return dateString;
@@ -269,6 +270,46 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
                     case 'audiobookURL': return 'Link to the audiobook (e.g., Audible)';
                     case 'audiobookRating': return 'Rating of the audiobook';
                     default: return 'Field data';
+                  }
+                }
+                
+                // Special handling for thumbnail field to show image preview
+                if (bookField === 'thumbnail') {
+                  const thumbnailUrl = getBookValue(bookField);
+                  if (thumbnailUrl && thumbnailUrl !== 'None') {
+                    return (
+                      <div className="flex items-center gap-2">
+                        <img 
+                          src={book.thumbnail || ''} 
+                          alt="Cover" 
+                          className="w-6 h-8 object-cover rounded shadow-sm"
+                          onError={(e) => {
+                            // Show placeholder on error
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const placeholder = target.nextElementSibling as HTMLElement;
+                            if (placeholder) placeholder.style.display = 'flex';
+                          }}
+                        />
+                        <div className="w-6 h-8 bg-gradient-to-b from-blue-400 to-blue-600 rounded flex items-center justify-center shadow-sm" style={{ display: 'none' }}>
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14zM19 12h2a1 1 0 010 2h-2v2a1 1 0 01-2 0v-2h-2a1 1 0 010-2h2v-2a1 1 0 012 0v2z" />
+                          </svg>
+                        </div>
+                        <span className="text-xs text-gray-600">Cover image</span>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-8 bg-gradient-to-b from-blue-400 to-blue-600 rounded flex items-center justify-center shadow-sm">
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14zM19 12h2a1 1 0 010 2h-2v2a1 1 0 01-2 0v-2h-2a1 1 0 010-2h2v-2a1 1 0 012 0v2z" />
+                          </svg>
+                        </div>
+                        <span className="text-xs text-gray-400">No cover</span>
+                      </div>
+                    );
                   }
                 }
                 

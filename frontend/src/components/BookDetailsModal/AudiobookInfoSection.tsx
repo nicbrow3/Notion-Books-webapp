@@ -48,12 +48,6 @@ const AudiobookInfoSection: React.FC<AudiobookInfoSectionProps> = ({
       ) : book.audiobookData?.hasAudiobook ? (
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
-              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Available
-            </span>
             {book.audiobookData?.source && (
               <span className="text-xs text-purple-600 bg-purple-100 px-2 py-1 rounded">
                 via {book.audiobookData.source === 'audnexus' ? 'Audnexus' : book.audiobookData.source}
@@ -108,66 +102,6 @@ const AudiobookInfoSection: React.FC<AudiobookInfoSectionProps> = ({
               <div>
                 <span className="font-medium text-purple-900">Chapters:</span>
                 <p className="text-purple-700">{book.audiobookData.chapterCount}</p>
-              </div>
-            )}
-            
-            {book.audiobookData?.publishedDate && (
-              <div>
-                <span className="font-medium text-purple-900">Release Date:</span>
-                <p className="text-purple-700">{(() => {
-                  try {
-                    // Remove time portion if present (T00:00:00.000Z)
-                    const cleanDate = book.audiobookData.publishedDate.split('T')[0];
-                    
-                    // Check if it's just a year (4 digits) - show only the year
-                    if (/^\d{4}$/.test(cleanDate.trim())) {
-                      return cleanDate.trim();
-                    }
-                    
-                    // Check if it's in YYYY-MM-DD format to avoid timezone issues
-                    const isoDateMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                    if (isoDateMatch) {
-                      const [, year, month, day] = isoDateMatch;
-                      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                      return date.toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      });
-                    }
-                    
-                    // Try to parse the full date
-                    const date = new Date(cleanDate);
-                    
-                    // Check if the date is valid
-                    if (isNaN(date.getTime())) {
-                      // If invalid date but contains a year, extract and use just the year
-                      const yearMatch = cleanDate.match(/\d{4}/);
-                      if (yearMatch) {
-                        return yearMatch[0];
-                      }
-                      return cleanDate;
-                    }
-                    
-                    return date.toLocaleDateString('en-US', { 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    });
-                  } catch {
-                    return book.audiobookData.publishedDate;
-                  }
-                })()}</p>
-              </div>
-            )}
-            
-            {book.audiobookData?.rating && (
-              <div>
-                <span className="font-medium text-purple-900">Audiobook Rating:</span>
-                <p className="text-purple-700">
-                  {book.audiobookData.rating}/5
-                  {book.audiobookData.ratingCount && ` (${book.audiobookData.ratingCount} reviews)`}
-                </p>
               </div>
             )}
             
