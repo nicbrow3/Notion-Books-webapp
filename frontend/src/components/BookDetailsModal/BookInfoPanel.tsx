@@ -4,12 +4,14 @@ import AudiobookInfoSection from './AudiobookInfoSection';
 import FieldSourceTable from './FieldSourceTable';
 import { CategoryService } from '../../services/categoryService';
 import SourceBrowser from './SourceBrowser';
+import { parseHtmlForDisplay, extractPlainText } from './utils/htmlUtils';
+import { formatDate as formatDateUtil } from './utils/dateUtils';
 
 export interface FieldSelections {
   description: 'audiobook' | 'original' | 'audiobook_summary' | number; // number = edition index
   publisher: 'audiobook' | 'original' | number;
   pageCount: 'original' | number;
-  publishedDate: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
+  releaseDate: 'published' | 'original' | 'audiobook' | 'first_published' | 'copyright' | 'audiobook_copyright' | number; // published = edition date, original = original published date, audiobook = audiobook date, number = edition index
   isbn: 'original' | number;
   thumbnail: 'original' | 'audiobook' | number;
 }
@@ -220,7 +222,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     description: 'original',
     publisher: 'original', 
     pageCount: 'original',
-    publishedDate: 'original',
+    releaseDate: 'original',
     isbn: 'original',
     thumbnail: 'original'
   });
@@ -230,12 +232,12 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     description: boolean;
     publisher: boolean;
     pageCount: boolean;
-    publishedDate: boolean;
+    releaseDate: boolean;
   }>({
     description: false,
     publisher: false,
     pageCount: false,
-    publishedDate: false
+    releaseDate: false
   });
 
   // Function to toggle field table visibility
@@ -444,7 +446,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     const savedDescriptionDefault = CategoryService.getFieldDefault('description');
     const savedPublisherDefault = CategoryService.getFieldDefault('publisher');
     const savedPageCountDefault = CategoryService.getFieldDefault('pages');
-    const savedPublishedDateDefault = CategoryService.getFieldDefault('publisheddate');
+    const savedReleaseDateDefault = CategoryService.getFieldDefault('releaseDate');
     const savedThumbnailDefault = CategoryService.getFieldDefault('thumbnail');
 
     // Use saved defaults if available
@@ -460,8 +462,8 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       newSelections.pageCount = savedPageCountDefault as 'original' | number;
       hasChanges = true;
     }
-    if (savedPublishedDateDefault !== null && fieldSelections.publishedDate === 'original') {
-      newSelections.publishedDate = savedPublishedDateDefault;
+    if (savedReleaseDateDefault !== null && fieldSelections.releaseDate === 'original') {
+      newSelections.releaseDate = savedReleaseDateDefault;
       hasChanges = true;
     }
     if (savedThumbnailDefault !== null && fieldSelections.thumbnail === 'original') {
@@ -471,9 +473,9 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
 
     // Check if audiobook has the isEarlierDate flag set, which means we already determined
     // the audiobook date is earlier than the book date during audiobook data loading
-    if (book.audiobookData?.hasAudiobook && book.audiobookData.isEarlierDate && fieldSelections.publishedDate === 'original') {
+    if (book.audiobookData?.hasAudiobook && book.audiobookData.isEarlierDate && fieldSelections.releaseDate === 'original') {
       console.log('Using audiobook date as default because it has isEarlierDate flag set');
-      newSelections.publishedDate = 'audiobook';
+      newSelections.releaseDate = 'audiobook';
       hasChanges = true;
     }
     
@@ -503,13 +505,13 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       }
 
       // Use smart date selection algorithm to find the best default published date
-      if (fieldSelections.publishedDate === 'original') {
+      if (fieldSelections.releaseDate === 'original') {
         console.log('📅 Running smart date selection algorithm');
         const smartDateSelection = findEarliestDateSource();
         console.log('📅 Smart date selection result:', smartDateSelection);
         if (smartDateSelection && smartDateSelection !== 'original') {
-          console.log('📅 Changing default publishedDate to:', smartDateSelection);
-          newSelections.publishedDate = smartDateSelection;
+          console.log('📅 Changing default releasedate to:', smartDateSelection);
+          newSelections.releaseDate = smartDateSelection;
           hasChanges = true;
         }
       }
@@ -648,11 +650,9 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     return sources;
   };
 
-
-
-  // Get available published date sources
-  const getPublishedDateSources = () => {
-    console.log('📅 getPublishedDateSources called with book data:', {
+  // Get available release date sources
+  const getReleaseDateSources = () => {
+    console.log('📅 getReleaseDateSources called with book data:', {
       copyright: book.copyright,
       audiobookCopyright: book.audiobookData?.copyright,
       originalPublishedDate: book.originalPublishedDate,
@@ -660,11 +660,11 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       audiobookPublishedDate: book.audiobookData?.publishedDate
     });
     
-    const sources: Array<{value: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number, label: string, content: string}> = [];
+    const sources: Array<{value: 'published' | 'original' | 'audiobook' | 'first_published' | 'copyright' | 'audiobook_copyright' | number, label: string, content: string}> = [];
     
     // Collect all potential dates first
     const potentialSources: Array<{
-      value: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
+      value: 'published' | 'original' | 'audiobook' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
       label: string;
       content: string;
       isYearOnly: boolean;
@@ -806,7 +806,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       });
     });
 
-    console.log('📅 Final published date sources:', sources.map(s => ({ label: s.label, content: s.content })));
+    console.log('📅 Final releasedate sources:', sources.map(s => ({ label: s.label, content: s.content })));
     return sources;
   };
 
@@ -823,9 +823,9 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     return selectedSource?.content || book.pageCount || null;
   };
 
-  const getSelectedPublishedDate = () => {
-    const sources = getPublishedDateSources();
-    const selectedSource = sources.find(source => source.value === fieldSelections.publishedDate);
+  const getSelectedReleaseDate = () => {
+    const sources = getReleaseDateSources();
+    const selectedSource = sources.find(source => source.value === fieldSelections.releaseDate);
     
     // If we have multiple sources, return the selected one
     if (sources.length > 1) {
@@ -862,7 +862,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
         description: getSelectedDescription(),
         publisher: getSelectedPublisher(),
         pageCount: getSelectedPageCount(),
-        publishedDate: getSelectedPublishedDate(),
+        releaseDate: getSelectedReleaseDate(),
         thumbnail: getSelectedThumbnail(),
       };
       onFieldSelectionChange(selections, selectedData);
@@ -989,7 +989,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
             {fieldSelections.description === 'audiobook_summary' ? (
               <div 
                 className={`prose prose-sm max-w-none ${!isDescriptionExpanded ? 'line-clamp-3 max-h-[4.5rem] overflow-hidden' : ''}`}
-                dangerouslySetInnerHTML={{ __html: getSelectedDescription() }}
+                dangerouslySetInnerHTML={{ __html: parseHtmlForDisplay(getSelectedDescription()) }}
               />
             ) : (
               <p 
@@ -1002,38 +1002,44 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
                 {getSelectedDescription()}
               </p>
             )}
-            {getSelectedDescription().length > 200 && (
-              <button
-                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                className="text-blue-600 hover:text-blue-800 text-sm mt-2 underline"
-              >
-                {isDescriptionExpanded ? 'Show less' : 'Show more'}
-              </button>
-            )}
+            {(() => {
+              // Use plain text length for "Show more" button logic, especially for HTML content
+              const textLength = fieldSelections.description === 'audiobook_summary' 
+                ? extractPlainText(getSelectedDescription()).length 
+                : getSelectedDescription().length;
+              return textLength > 200 && (
+                <button
+                  onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                  className="text-blue-600 hover:text-blue-800 text-sm mt-2 underline"
+                >
+                  {isDescriptionExpanded ? 'Show less' : 'Show more'}
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}
 
       {/* Detailed Metadata */}
       <div className="grid grid-cols-2 gap-4 text-sm mb-6">
-        {getPublishedDateSources().length > 0 && (
+        {getReleaseDateSources().length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="font-medium text-gray-900">Published:</span>
-              {getPublishedDateSources().length > 1 && (
+              {getReleaseDateSources().length > 1 && (
                 <FieldSourceTable
                   fieldName="Published Date"
-                  sources={getPublishedDateSources()}
-                  selectedValue={fieldSelections.publishedDate}
+                  sources={getReleaseDateSources()}
+                  selectedValue={fieldSelections.releaseDate}
                   onSelect={(value) => {
-                    setFieldSelections(prev => ({ ...prev, publishedDate: value }));
+                    setFieldSelections(prev => ({ ...prev, releaseDate: value }));
                   }}
-                  isOpen={openFieldTables.publishedDate}
-                  onToggle={() => toggleFieldTable('publishedDate')}
+                  isOpen={openFieldTables.releaseDate}
+                  onToggle={() => toggleFieldTable('releaseDate')}
                 />
               )}
             </div>
-            <p className="text-gray-600">{formatDate(getSelectedPublishedDate())}</p>
+            <p className="text-gray-600">{formatDate(getSelectedReleaseDate())}</p>
           </div>
         )}
         {getSelectedPublisher() && (

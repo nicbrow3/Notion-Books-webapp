@@ -904,26 +904,28 @@ router.patch('/pages/:pageId/book', requireAuth, async (req, res) => {
 });
 
 // Search for existing books in a database
-router.get('/database/:databaseId/search', requireAuth, async (req, res) => {
+router.post('/database/:databaseId/search', requireAuth, async (req, res) => {
   try {
+    console.log('Search request received:', {
+      databaseId: req.params.databaseId,
+      body: req.body,
+      isbn: req.body?.isbn,
+      title: req.body?.title,
+      fieldMappings: req.body?.fieldMappings ? 'Present' : 'Missing'
+    });
+
     const { databaseId } = req.params;
-    const { isbn, title, fieldMappings } = req.query;
+    const { isbn, title, fieldMappings } = req.body;
     
     if (!isbn && !title) {
+      console.log('Validation failed: No ISBN or title provided');
       return res.status(400).json({ error: 'Either ISBN or title is required for search' });
     }
 
     const token = await getNotionToken(req);
     
-    // Parse field mappings if provided
-    let mappings = {};
-    if (fieldMappings) {
-      try {
-        mappings = JSON.parse(fieldMappings);
-      } catch (e) {
-        console.warn('Failed to parse field mappings:', e);
-      }
-    }
+    // Use field mappings directly (no need to parse since it's already an object)
+    const mappings = fieldMappings || {};
 
     // Get database properties to find available fields
     const database = await notionRequest(token, 'GET', `/databases/${databaseId}`);
@@ -1023,6 +1025,11 @@ router.get('/database/:databaseId/search', requireAuth, async (req, res) => {
 
   } catch (error) {
     console.error('Error searching database:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response?.data
+    });
     
     if (error.response?.status === 404) {
       return res.status(404).json({ error: 'Database not found or access denied' });
@@ -1032,7 +1039,12 @@ router.get('/database/:databaseId/search', requireAuth, async (req, res) => {
       return res.status(401).json({ error: 'Notion access token invalid or expired' });
     }
     
-    res.status(500).json({ error: 'Failed to search database' });
+    // Return the actual error for debugging
+    res.status(500).json({ 
+      error: 'Failed to search database',
+      details: error.message,
+      notionError: error.response?.data
+    });
   }
 });
 

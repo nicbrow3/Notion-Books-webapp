@@ -9,6 +9,19 @@ import DuplicateBookModal from './DuplicateBookModal';
 import SuccessModal from './SuccessModal';
 import SourceBrowser from './SourceBrowser';
 
+// New components
+import BookHeader from './components/BookHeader';
+import ActionBar from './components/ActionBar';
+import NotionFooter from './components/NotionFooter';
+
+// Hooks
+export { useBookData } from './hooks/useBookData';
+export { useCategoryManagement } from './hooks/useCategoryManagement';
+export { useNotionIntegration } from './hooks/useNotionIntegration';
+
+// Utils
+export { formatDate } from './utils/dateUtils';
+
 export {
   BookInfoPanel,
   CategoriesManagementPanel,
@@ -19,5 +32,8 @@ export {
   ManualMappingModal,
   DuplicateBookModal,
   SuccessModal,
-  SourceBrowser
+  SourceBrowser,
+  BookHeader,
+  ActionBar,
+  NotionFooter
 }; 

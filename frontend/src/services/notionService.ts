@@ -298,16 +298,20 @@ export class NotionService {
    */
   static async searchExistingBooks(databaseId: string, isbn?: string, title?: string, fieldMappings?: any): Promise<NotionBookSearchResult[]> {
     try {
-      const searchParams = new URLSearchParams();
-      if (isbn) searchParams.append('isbn', isbn);
-      if (title) searchParams.append('title', title);
-      if (fieldMappings) searchParams.append('fieldMappings', JSON.stringify(fieldMappings));
+      const requestBody: any = {};
+      if (isbn) requestBody.isbn = isbn;
+      if (title) requestBody.title = title;
+      if (fieldMappings) requestBody.fieldMappings = fieldMappings;
 
       const response = await fetch(
-        `${API_BASE_URL}/api/notion/database/${databaseId}/search?${searchParams}`,
+        `${API_BASE_URL}/api/notion/database/${databaseId}/search`,
         {
-          method: 'GET',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
           credentials: 'include',
+          body: JSON.stringify(requestBody),
         }
       );
 

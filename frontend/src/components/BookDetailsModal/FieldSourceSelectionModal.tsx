@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { CategoryService } from '../../services/categoryService';
+import { parseHtmlForDisplay } from './utils/htmlUtils';
 
 interface FieldSource<T = string> {
   value: T;
@@ -36,6 +37,72 @@ const FieldSourceSelectionModal = <T extends string | number>({
     return () => setIsMounted(false);
   }, []);
 
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return ''; // Return empty string for falsy dates
+    
+    try {
+      // Remove time portion if present (T00:00:00.000Z)
+      const cleanDate = dateString.split('T')[0];
+      
+      // Check if it's just a year (4 digits) - show only the year
+      if (/^\d{4}$/.test(cleanDate.trim())) {
+        return cleanDate.trim();
+      }
+      
+      // Check if it's in YYYY-MM-DD format to avoid timezone issues
+      const isoDateMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (isoDateMatch) {
+        const [, year, month, day] = isoDateMatch;
+        // Use UTC to prevent the date from shifting due to timezone differences
+        const date = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: '2-digit',
+          timeZone: 'UTC'
+        });
+      }
+      
+      // Try to parse the full date from original string to preserve timezone if available
+      const date = new Date(dateString);
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        // If invalid date but contains a year, extract and use just the year
+        const yearMatch = cleanDate.match(/\d{4}/);
+        if (yearMatch) {
+          return yearMatch[0];
+        }
+        return dateString; // Return original if we can't parse anything
+      }
+      
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: '2-digit'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Helper function to check if content is a date and format it
+  const formatContentIfDate = (content: string | number): string | number => {
+    if (typeof content !== 'string') return content;
+    
+    // Check if the field name suggests this is a date field
+    const isDateField = fieldName.toLowerCase().includes('date') || 
+                       fieldName.toLowerCase().includes('published') ||
+                       fieldName.toLowerCase().includes('copyright') ||
+                       fieldName.toLowerCase().includes('release');
+    
+    if (!isDateField) return content;
+    
+    // Try to format as date
+    const formatted = formatDate(content);
+    return formatted || content;
+  };
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event bubbling to parent modal
     if (e.target === e.currentTarget) {
@@ -60,6 +127,14 @@ const FieldSourceSelectionModal = <T extends string | number>({
     }
     onSelect(source.value);
     onClose();
+  };
+
+  // Convert camelCase to proper case with spaces
+  const formatFieldName = (fieldName: string): string => {
+    return fieldName
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase())
+      .trim();
   };
 
   // Determine if this is a description field that needs wider layout
@@ -121,7 +196,7 @@ const FieldSourceSelectionModal = <T extends string | number>({
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">
-                Select {fieldName} Source
+                Select {formatFieldName(fieldName)} Source
               </h2>
               <p className="text-sm text-gray-600 mt-1">
                 Choose which source to use for this field
@@ -145,7 +220,7 @@ const FieldSourceSelectionModal = <T extends string | number>({
               <tr>
                 <th className={`text-left p-4 font-medium text-gray-700 ${layoutConfig.defaultColumnWidth}`}>Default</th>
                 <th className={`text-left p-4 font-medium text-gray-700 ${layoutConfig.sourceColumnWidth}`}>Source</th>
-                <th className="text-left p-4 font-medium text-gray-700">{fieldName}</th>
+                <th className="text-left p-4 font-medium text-gray-700">{formatFieldName(fieldName)}</th>
               </tr>
             </thead>
             <tbody>
@@ -185,11 +260,6 @@ const FieldSourceSelectionModal = <T extends string | number>({
                     <td className={`p-4 font-medium text-gray-800 border-r border-gray-200 ${layoutConfig.sourceColumnWidth}`}>
                       <div className="flex items-center gap-2">
                         {source.label}
-                        {isDefault && (
-                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
-                            Default
-                          </span>
-                        )}
                         {isSelected && (
                           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
                             Selected
@@ -202,19 +272,19 @@ const FieldSourceSelectionModal = <T extends string | number>({
                         <div className="flex items-start min-h-[4rem]">
                           {typeof source.content === 'string' ? (
                             <div className="w-full overflow-hidden">
-                              {source.label === 'About this listen' ? (
+                              {source.label === 'About this listen' || source.label === 'Audiobook Summary' ? (
                                 <div 
                                   className="prose prose-sm max-w-none line-clamp-3 break-words"
-                                  dangerouslySetInnerHTML={{ __html: source.content }}
+                                  dangerouslySetInnerHTML={{ __html: parseHtmlForDisplay(source.content as string) }}
                                 />
                               ) : (
                                 <p className="text-sm leading-relaxed line-clamp-3 break-words">
-                                  {source.content}
+                                  {formatContentIfDate(source.content)}
                                 </p>
                               )}
                             </div>
                           ) : (
-                            <span className="text-sm">{source.content}</span>
+                            <span className="text-sm">{formatContentIfDate(source.content)}</span>
                           )}
                         </div>
                       ) : isImageField ? (
@@ -276,7 +346,7 @@ const FieldSourceSelectionModal = <T extends string | number>({
                         </div>
                       ) : (
                         <div className="flex items-center min-h-[2.5rem]">
-                          <span className="text-sm">{source.content}</span>
+                          <span className="text-sm">{formatContentIfDate(source.content)}</span>
                         </div>
                       )}
                     </td>

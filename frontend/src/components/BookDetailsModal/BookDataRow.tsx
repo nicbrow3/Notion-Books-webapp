@@ -26,6 +26,8 @@ interface BookDataRowProps {
   onSelectSource: (fieldId: string) => void;
   onTempFieldMappingChange?: (bookField: string, notionProperty: string) => void;
   fieldSelections?: FieldSelections | null;
+  selectedCategories?: string[];
+  onOpenCategoriesModal?: () => void;
 }
 
 const BookDataRow: React.FC<BookDataRowProps> = ({
@@ -39,7 +41,9 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
   loadingDatabaseProperties,
   onSelectSource,
   onTempFieldMappingChange,
-  fieldSelections
+  fieldSelections,
+  selectedCategories,
+  onOpenCategoriesModal
 }) => {
   // Get current Notion mapping for this field
   const getCurrentMapping = () => {
@@ -80,8 +84,8 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
         case 'pageCount':
           selectedValue = fieldSelections.pageCount;
           break;
-        case 'publishedDate':
-          selectedValue = fieldSelections.publishedDate;
+        case 'releaseDate':
+          selectedValue = fieldSelections.releaseDate;
           break;
         case 'isbn':
           selectedValue = fieldSelections.isbn;
@@ -136,6 +140,53 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
         <span className="text-sm" title={value}>
           {value.substring(0, 100)}...
         </span>
+      );
+    }
+    
+    if (field.id === 'categories') {
+      // Use the selectedCategories prop instead of parsing the value
+      const categories = selectedCategories || [];
+      
+      if (categories.length === 0) {
+        return (
+          <span 
+            className="text-gray-400 italic cursor-pointer hover:text-gray-600 transition-colors" 
+            onClick={onOpenCategoriesModal}
+            title="Click to select categories"
+          >
+            No categories selected
+          </span>
+        );
+      }
+      
+      // Display up to 2 lines worth of categories
+      const maxCategoriesPerLine = 3; // Adjust based on typical category length
+      const maxCategories = maxCategoriesPerLine * 2;
+      const displayCategories = categories.slice(0, maxCategories);
+      const hasMore = categories.length > maxCategories;
+      
+      return (
+        <div className="text-sm">
+          <div 
+            className="flex flex-wrap gap-1 cursor-pointer" 
+            onClick={onOpenCategoriesModal}
+            title="Click to manage categories"
+          >
+            {displayCategories.map((category, index) => (
+              <span
+                key={index}
+                className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full hover:bg-blue-200 transition-colors"
+              >
+                {category}
+              </span>
+            ))}
+            {hasMore && (
+              <span className="inline-block text-gray-500 text-xs px-2 py-1 hover:text-gray-700 transition-colors">
+                +{categories.length - maxCategories} more...
+              </span>
+            )}
+          </div>
+        </div>
       );
     }
     

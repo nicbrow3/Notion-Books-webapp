@@ -6,7 +6,7 @@ import BookDataRow from './BookDataRow';
 interface BookDataField {
   id: string;
   label: string;
-  category: 'basic' | 'publishing' | 'audiobook' | 'metadata';
+  category: 'basic' | 'publishing' | 'audiobook';
 }
 
 interface BookDataTableProps {
@@ -23,6 +23,7 @@ interface BookDataTableProps {
   audiobookData?: any;
   openAudiobookSearch?: () => void;
   loadingAudiobook?: boolean;
+  onOpenCategoriesModal?: () => void;
 }
 
 // Configuration for all book data fields
@@ -37,25 +38,19 @@ const bookDataFields: BookDataField[] = [
   
   // Publishing Information
   { id: 'publisher', label: 'Publisher', category: 'publishing' },
-  { id: 'publishedDate', label: 'Published Date', category: 'publishing' },
-  { id: 'originalPublishedDate', label: 'Original Published Date', category: 'publishing' },
+  { id: 'releaseDate', label: 'Release Date', category: 'publishing' },
   { id: 'pageCount', label: 'Page Count', category: 'publishing' },
   { id: 'isbn13', label: 'ISBN-13', category: 'publishing' },
   { id: 'isbn10', label: 'ISBN-10', category: 'publishing' },
   
   // Audiobook Information
   { id: 'audiobookPublisher', label: 'Audiobook Publisher', category: 'audiobook' },
-  { id: 'audiobookPublishedDate', label: 'Audiobook Published Date', category: 'audiobook' },
   { id: 'audiobookNarrators', label: 'Narrators', category: 'audiobook' },
   { id: 'audiobookDuration', label: 'Duration', category: 'audiobook' },
   { id: 'audiobookChapters', label: 'Chapters', category: 'audiobook' },
   { id: 'audiobookRating', label: 'Audiobook Rating', category: 'audiobook' },
   { id: 'audiobookASIN', label: 'ASIN', category: 'audiobook' },
   { id: 'audiobookURL', label: 'Audiobook URL', category: 'audiobook' },
-  
-  // Metadata
-  { id: 'status', label: 'Reading Status', category: 'metadata' },
-  { id: 'notes', label: 'Notes', category: 'metadata' }
 ];
 
 const BookDataTable: React.FC<BookDataTableProps> = ({
@@ -72,6 +67,7 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
   audiobookData,
   openAudiobookSearch,
   loadingAudiobook,
+  onOpenCategoriesModal,
 }) => {
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return ''; // Return empty string for falsy dates
@@ -175,18 +171,27 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
         return book.publisher || '';
       }
       
-      if (fieldId === 'publishedDate') {
+      if (fieldId === 'releaseDate') {
         const selection = fieldSelections[fieldId];
         if (selection === 'original') {
           return book.publishedDate || '';
         }
+        if (selection === 'first_published') {
+          return book.originalPublishedDate || '';
+        }
         if (selection === 'audiobook' && book.audiobookData?.publishedDate) {
           return book.audiobookData.publishedDate;
+        }
+        if (selection === 'copyright') {
+          return book.copyright || '';
+        }
+        if (selection === 'audiobook_copyright' && book.audiobookData?.copyright) {
+          return book.audiobookData.copyright;
         }
         if (typeof selection === 'number' && editions && editions[selection]?.publishedDate) {
           return editions[selection].publishedDate;
         }
-        // Fallback to original if selection doesn't match
+        // Fallback to published date if selection doesn't match
         return book.publishedDate || '';
       }
       
@@ -214,13 +219,11 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
       case 'rating': return book.averageRating ? `${book.averageRating}/5` : '';
       case 'thumbnail': return book.thumbnail || '';
       case 'publisher': return book.publisher || '';
-      case 'publishedDate': return formatDate(book.publishedDate);
-      case 'originalPublishedDate': return formatDate(book.originalPublishedDate);
+      case 'releaseDate': return formatDate(book.publishedDate) || formatDate(book.originalPublishedDate) || '';
       case 'pageCount': return book.pageCount?.toString() || '';
       case 'isbn13': return book.isbn13 || '';
       case 'isbn10': return book.isbn10 || '';
       case 'audiobookPublisher': return book.audiobookData?.publisher || '';
-      case 'audiobookPublishedDate': return formatDate(book.audiobookData?.publishedDate);
       case 'audiobookNarrators': 
         if (book.audiobookData?.narrators) {
           if (Array.isArray(book.audiobookData.narrators)) {
@@ -246,8 +249,6 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
         return '';
       case 'audiobookASIN': return book.audiobookData?.asin || '';
       case 'audiobookURL': return book.audiobookData?.audibleUrl || '';
-      case 'status': return 'To Read (default)';
-      case 'notes': return 'Empty (default)';
       default: return '';
     }
   };
@@ -272,13 +273,11 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
         case 'rating': return book.averageRating ? `${book.averageRating}/5` : '';
         case 'thumbnail': return book.thumbnail || '';
         case 'publisher': return book.publisher || '';
-        case 'publishedDate': return formatDate(book.publishedDate);
-        case 'originalPublishedDate': return formatDate(book.originalPublishedDate);
+        case 'releaseDate': return formatDate(book.publishedDate) || formatDate(book.originalPublishedDate) || '';
         case 'pageCount': return book.pageCount?.toString() || '';
         case 'isbn13': return book.isbn13 || '';
         case 'isbn10': return book.isbn10 || '';
         case 'audiobookPublisher': return book.audiobookData?.publisher || '';
-        case 'audiobookPublishedDate': return formatDate(book.audiobookData?.publishedDate);
         case 'audiobookNarrators': 
           if (book.audiobookData?.narrators) {
             if (Array.isArray(book.audiobookData.narrators)) {
@@ -304,11 +303,83 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
           return '';
         case 'audiobookASIN': return book.audiobookData?.asin || '';
         case 'audiobookURL': return book.audiobookData?.audibleUrl || '';
-        case 'status': return 'To Read (default)';
-        case 'notes': return 'Empty (default)';
         default: return '';
       }
     };
+
+    // Special handling for releaseDate field to include all date sources
+    if (fieldId === 'releaseDate') {
+      // 1. Add edition published date if available
+      if (book.publishedDate) {
+        sources.push({
+          value: 'original',
+          label: 'This Edition',
+          content: formatDate(book.publishedDate)
+        });
+      }
+
+      // 2. Add original published date if available and different
+      if (book.originalPublishedDate && book.originalPublishedDate !== book.publishedDate) {
+        sources.push({
+          value: 'first_published',
+          label: 'First Published',
+          content: formatDate(book.originalPublishedDate)
+        });
+      }
+
+      // 3. Add audiobook published date if available and different
+      if (book.audiobookData?.publishedDate && 
+          book.audiobookData.publishedDate !== book.publishedDate && 
+          book.audiobookData.publishedDate !== book.originalPublishedDate) {
+        sources.push({
+          value: 'audiobook',
+          label: 'Audiobook',
+          content: formatDate(book.audiobookData.publishedDate)
+        });
+      }
+
+      // 4. Add copyright dates if available
+      if (book.copyright && 
+          book.copyright !== book.publishedDate && 
+          book.copyright !== book.originalPublishedDate &&
+          book.copyright !== book.audiobookData?.publishedDate) {
+        sources.push({
+          value: 'copyright',
+          label: 'Copyright',
+          content: formatDate(book.copyright)
+        });
+      }
+
+      if (book.audiobookData?.copyright &&
+          book.audiobookData.copyright !== book.copyright &&
+          book.audiobookData.copyright !== book.publishedDate && 
+          book.audiobookData.copyright !== book.originalPublishedDate &&
+          book.audiobookData.copyright !== book.audiobookData?.publishedDate) {
+        sources.push({
+          value: 'audiobook_copyright',
+          label: 'Audiobook Copyright',
+          content: formatDate(book.audiobookData.copyright)
+        });
+      }
+
+      // 5. Add edition dates from other editions if available
+      if (editions && editions.length > 0) {
+        editions.forEach((edition, index) => {
+          if (edition.publishedDate && 
+              edition.publishedDate !== book.publishedDate && 
+              edition.publishedDate !== book.originalPublishedDate &&
+              edition.publishedDate !== book.audiobookData?.publishedDate) {
+            sources.push({
+              value: index,
+              label: `Edition ${index + 1} (${formatDate(edition.publishedDate)})`,
+              content: formatDate(edition.publishedDate)
+            });
+          }
+        });
+      }
+
+      return sources;
+    }
 
     const mainValue = getMainValue(fieldId);
     if (mainValue) {
@@ -326,7 +397,6 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
         switch (fieldId) {
           case 'title': editionValue = edition.title; break;
           case 'publisher': editionValue = edition.publisher; break;
-          case 'publishedDate': editionValue = edition.publishedDate; break;
           case 'pageCount': editionValue = edition.pageCount?.toString(); break;
           case 'description': editionValue = edition.description; break;
           case 'thumbnail': editionValue = edition.thumbnail; break;
@@ -393,7 +463,6 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
     basic: 'Basic Information',
     publishing: 'Publishing Details',
     audiobook: 'Audiobook Information',
-    metadata: 'Metadata'
   };
 
   const renderRow = (field: BookDataField) => {
@@ -412,6 +481,8 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
         onSelectSource={onSelectSource}
         onTempFieldMappingChange={onTempFieldMappingChange}
         fieldSelections={fieldSelections}
+        selectedCategories={selectedCategories}
+        onOpenCategoriesModal={onOpenCategoriesModal}
       />
     );
   };
@@ -472,7 +543,7 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
   return (
     <div className="space-y-6">
       {/* Table Header */}
-      <div className="grid grid-cols-4 gap-4 p-3 bg-gray-100 rounded-lg text-sm font-medium text-gray-700">
+      <div className="sticky top-0 z-10 grid grid-cols-4 gap-4 p-3 bg-gray-100 rounded-lg text-sm font-medium text-gray-700">
         <div>Field</div>
         <div>Value</div>
         <div>Source</div>

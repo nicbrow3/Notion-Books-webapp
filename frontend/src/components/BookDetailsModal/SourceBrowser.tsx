@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { BookSearchResult, BookEdition } from '../../types/book';
+import { parseHtmlForDisplay, extractPlainText } from './utils/htmlUtils';
 
 interface SourceBrowserProps {
   book: BookSearchResult;
@@ -286,7 +287,10 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
           {book.audiobookData.description && (
             <div className="mt-2">
               <span className="font-medium">Description:</span>
-              <p className="mt-1 line-clamp-4">{book.audiobookData.description}</p>
+              <div 
+                className="mt-1 line-clamp-4 prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: parseHtmlForDisplay(book.audiobookData.description) }}
+              />
             </div>
           )}
           {book.audiobookData.image && (
