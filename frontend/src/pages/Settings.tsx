@@ -7,6 +7,21 @@ import NotionFieldMappings from '../components/BookDetailsModal/NotionFieldMappi
 import { NotionService } from '../services/notionService';
 import { BookService } from '../services/bookService';
 import { CategoryService, CategorySettings } from '../services/categoryService';
+import Tooltip from '../components/ui/Tooltip';
+import { 
+  SpinnerGapIcon, 
+  CheckIcon, 
+  XIcon, 
+  LightningIcon, 
+  SignOutIcon, 
+  DownloadIcon, 
+  UploadIcon, 
+  ArrowClockwiseIcon, 
+  WarningIcon, 
+  CaretRightIcon, 
+  FloppyDiskIcon 
+} from '@phosphor-icons/react';
+import { ICON_CONTEXTS, ICON_WEIGHTS } from '../constants/iconConfig';
 
 const Settings: React.FC = () => {
   // Use auth context
@@ -36,6 +51,7 @@ const Settings: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   const [openLibraryStatus, setOpenLibraryStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [audnexusStatus, setAudnexusStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
   // Category settings state
   const [categorySettings, setCategorySettings] = useState<CategorySettings>({
@@ -102,11 +118,29 @@ const Settings: React.FC = () => {
         toast.error('Failed to connect to Google Books API');
       }
 
-      // Simulate Open Library API check
-      // In a real app, you would call an actual service method
-      setTimeout(() => {
-        setOpenLibraryStatus('connected');
-      }, 1000);
+      // Test Open Library API
+      try {
+        const response = await fetch('https://openlibrary.org/search.json?q=test&limit=1');
+        if (response.ok) {
+          setOpenLibraryStatus('connected');
+        } else {
+          setOpenLibraryStatus('error');
+        }
+      } catch (error) {
+        setOpenLibraryStatus('error');
+      }
+
+      // Test Audnexus API
+      try {
+        const response = await fetch('https://api.audnex.us/books/B073H9PF2D?region=us');
+        if (response.ok) {
+          setAudnexusStatus('connected');
+        } else {
+          setAudnexusStatus('error');
+        }
+      } catch (error) {
+        setAudnexusStatus('error');
+      }
     };
 
     testConnections();
@@ -471,10 +505,11 @@ const Settings: React.FC = () => {
         return (
           <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
             <div className="flex items-center">
-              <svg className="animate-spin h-5 w-5 text-yellow-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+              <SpinnerGapIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="animate-spin text-yellow-600 mr-2" 
+              />
               <span className="text-yellow-800">Checking API connection...</span>
             </div>
           </div>
@@ -483,9 +518,11 @@ const Settings: React.FC = () => {
         return (
           <div className="bg-green-50 border border-green-200 rounded-md p-4">
             <div className="flex items-center">
-              <svg className="h-5 w-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
+              <CheckIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="text-green-600 mr-2" 
+              />
               <span className="text-green-800">Connected</span>
             </div>
           </div>
@@ -494,9 +531,11 @@ const Settings: React.FC = () => {
         return (
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
             <div className="flex items-center">
-              <svg className="h-5 w-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+              <XIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.FILL} 
+                className="text-red-600 mr-2" 
+              />
               <span className="text-red-800">API connection failed. Please check your configuration.</span>
             </div>
           </div>
@@ -510,10 +549,11 @@ const Settings: React.FC = () => {
         return (
           <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
             <div className="flex items-center">
-              <svg className="animate-spin h-5 w-5 text-yellow-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+              <SpinnerGapIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="animate-spin text-yellow-600 mr-2" 
+              />
               <span className="text-yellow-800">Checking API connection...</span>
             </div>
           </div>
@@ -522,9 +562,11 @@ const Settings: React.FC = () => {
         return (
           <div className="bg-green-50 border border-green-200 rounded-md p-4">
             <div className="flex items-center">
-              <svg className="h-5 w-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
+              <CheckIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="text-green-600 mr-2" 
+              />
               <span className="text-green-800">Connected</span>
             </div>
           </div>
@@ -533,9 +575,55 @@ const Settings: React.FC = () => {
         return (
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
             <div className="flex items-center">
-              <svg className="h-5 w-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+              <XIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.FILL} 
+                className="text-red-600 mr-2" 
+              />
+              <span className="text-red-800">API connection failed</span>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  const renderAudnexusStatus = () => {
+    switch (audnexusStatus) {
+      case 'checking':
+        return (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <div className="flex items-center">
+              <SpinnerGapIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="animate-spin text-yellow-600 mr-2" 
+              />
+              <span className="text-yellow-800">Checking API connection...</span>
+            </div>
+          </div>
+        );
+      case 'connected':
+        return (
+          <div className="bg-green-50 border border-green-200 rounded-md p-4">
+            <div className="flex items-center">
+              <CheckIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="text-green-600 mr-2" 
+              />
+              <span className="text-green-800">Connected</span>
+            </div>
+          </div>
+        );
+      case 'error':
+        return (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="flex items-center">
+              <XIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.FILL} 
+                className="text-red-600 mr-2" 
+              />
               <span className="text-red-800">API connection failed</span>
             </div>
           </div>
@@ -566,35 +654,33 @@ const Settings: React.FC = () => {
             </div>
             
             <div className="flex space-x-2">
-              <button
-                onClick={async () => {
-                  try {
-                    const result = await NotionService.testConnection();
-                    if (result.success) {
-                      toast.success('Notion connection is working!');
-                    } else {
-                      toast.error(`Connection test failed: ${result.message}`);
+              <Tooltip content="Test Connection">
+                <button
+                  onClick={async () => {
+                    try {
+                      const result = await NotionService.testConnection();
+                      if (result.success) {
+                        toast.success('Notion connection is working!');
+                      } else {
+                        toast.error(`Connection test failed: ${result.message}`);
+                      }
+                    } catch (error) {
+                      toast.error('Failed to test Notion connection');
                     }
-                  } catch (error) {
-                    toast.error('Failed to test Notion connection');
-                  }
-                }}
-                className="p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
-                title="Test Connection"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </button>
-              <button
-                onClick={handleDisconnect}
-                className="p-2 rounded-md bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-                title="Disconnect"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
+                  }}
+                  className="group p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                >
+                  <LightningIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} className="group-hover:animate-wiggle" />
+                </button>
+              </Tooltip>
+              <Tooltip content="Disconnect">
+                <button
+                  onClick={handleDisconnect}
+                  className="group p-2 rounded-md bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                >
+                  <SignOutIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.BOLD} className="group-hover:animate-wiggle" />
+                </button>
+              </Tooltip>
             </div>
           </div>
         ) : (
@@ -639,33 +725,29 @@ const Settings: React.FC = () => {
             
             {/* Save Settings Button */}
             {isAuthenticated && (
-              <button
-                onClick={handleSaveSettings}
-                disabled={isSavingSettings || !hasUnsavedChanges()}
-                className={`px-4 py-2 rounded-md text-white flex items-center transition-colors ${
-                  !hasUnsavedChanges()
-                    ? 'bg-gray-400 cursor-not-allowed' 
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
-                title={hasUnsavedChanges() ? "Save Settings" : "No changes to save"}
-              >
-                {isSavingSettings ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Save
-                  </>
-                )}
-              </button>
+              <Tooltip content={hasUnsavedChanges() ? "Save Settings" : "No changes to save"}>
+                <button
+                  onClick={handleSaveSettings}
+                  disabled={isSavingSettings || !hasUnsavedChanges()}
+                  className={`group px-4 py-2 rounded-md text-white flex items-center transition-colors ${
+                    !hasUnsavedChanges()
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  {isSavingSettings ? (
+                    <>
+                      <SpinnerGapIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.BOLD} className="animate-spin mr-2" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <FloppyDiskIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} className="mr-2 group-hover:animate-wiggle" />
+                      Save
+                    </>
+                  )}
+                </button>
+              </Tooltip>
             )}
             
             {/* Hidden file input */}
@@ -678,28 +760,26 @@ const Settings: React.FC = () => {
             />
             
             {/* Import Button */}
-            <button
-              onClick={triggerFileInput}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
-              title="Import Settings"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Import
-            </button>
+            <Tooltip content="Import Settings">
+              <button
+                onClick={triggerFileInput}
+                className="group bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
+              >
+                <DownloadIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} className="mr-2 group-hover:animate-wiggle" />
+                Import
+              </button>
+            </Tooltip>
             
             {/* Export Button */}
-            <button
-              onClick={handleExportSettings}
-              className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors flex items-center"
-              title="Export Settings"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
-              </svg>
-              Export
-            </button>
+            <Tooltip content="Export Settings">
+              <button
+                onClick={handleExportSettings}
+                className="group bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors flex items-center"
+              >
+                <UploadIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} className="mr-2 group-hover:animate-wiggle" />
+                Export
+              </button>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -714,39 +794,30 @@ const Settings: React.FC = () => {
               <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-semibold text-gray-900">Database Selection</h2>
-                  <button
-                    onClick={loadDatabases}
-                    disabled={isLoadingDatabases}
-                    className="p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
-                    title="Refresh Databases"
-                  >
-                    {isLoadingDatabases ? (
-                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    )}
-                  </button>
+                  <Tooltip content="Refresh Databases">
+                    <button
+                      onClick={loadDatabases}
+                      disabled={isLoadingDatabases}
+                      className="group p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+                    >
+                      {isLoadingDatabases ? (
+                        <SpinnerGapIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.BOLD} className="animate-spin" />
+                      ) : (
+                        <ArrowClockwiseIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} className="group-hover:animate-wiggle" />
+                      )}
+                    </button>
+                  </Tooltip>
                 </div>
                 
                 {isLoadingDatabases ? (
                   <div className="flex items-center py-4">
-                    <svg className="animate-spin h-5 w-5 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <SpinnerGapIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.BOLD} className="animate-spin text-blue-600 mr-2" />
                     <span className="text-gray-600">Loading databases...</span>
                   </div>
                 ) : databases.length === 0 ? (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <div className="flex items-center">
-                      <svg className="h-5 w-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                      </svg>
+                      <WarningIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} className="text-yellow-600 mr-2" />
                       <div>
                         <p className="text-yellow-800 font-medium">No databases found</p>
                         <p className="text-yellow-700 text-sm mt-1">
@@ -805,10 +876,7 @@ const Settings: React.FC = () => {
 
                   {isLoadingProperties ? (
                     <div className="flex items-center py-4">
-                      <svg className="animate-spin h-5 w-5 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
+                      <SpinnerGapIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.BOLD} className="animate-spin text-blue-600 mr-2" />
                       <span className="text-gray-600">Loading database properties...</span>
                     </div>
                   ) : (
@@ -828,8 +896,7 @@ const Settings: React.FC = () => {
                           categories: [],
                           averageRating: 0,
                           thumbnail: '',
-                          originalPublishedDate: '',
-                          publishedDate: '',
+                          publishedDate: '2023-01-15',
                           source: 'mock',
                           audiobookData: {
                             hasAudiobook: false,
@@ -844,7 +911,7 @@ const Settings: React.FC = () => {
                             audibleUrl: '',
                             rating: 0,
                             ratingCount: 0,
-                            publishedDate: ''
+                            publishedDate: '2023-03-01'
                           }
                         }}
                         selectedCategories={[]}
@@ -988,21 +1055,28 @@ const Settings: React.FC = () => {
               >
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-gray-900">User Genre Mappings</h3>
-                  <svg 
-                    className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isCustomMappingsCollapsed ? 'rotate-0' : 'rotate-90'}`} 
-                    fill="currentColor" 
-                    viewBox="0 0 20 20"
-                  >
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
+                  <CaretRightIcon 
+                    size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                    weight={ICON_WEIGHTS.FILL} 
+                    className={`transition-transform duration-200 text-gray-600 ${isCustomMappingsCollapsed ? 'rotate-0' : 'rotate-90'}`} 
+                  />
                 </div>
               </div>
 
-              {!isCustomMappingsCollapsed && (
-                Object.keys(getGroupedMappings()).length === 0 ? (
-                  <p className="text-sm text-gray-500 italic p-3">No custom mappings defined.</p>
-                ) : (
-                  <div className="border border-gray-200 rounded-md overflow-hidden">
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                isCustomMappingsCollapsed 
+                  ? 'max-h-0 opacity-0' 
+                  : 'max-h-[1000px] opacity-100'
+              }`}>
+                <div className={`transform transition-all duration-300 ease-in-out ${
+                  isCustomMappingsCollapsed 
+                    ? 'translate-y-[-10px] scale-98' 
+                    : 'translate-y-0 scale-100'
+                }`}>
+                  {Object.keys(getGroupedMappings()).length === 0 ? (
+                    <p className="text-sm text-gray-500 italic p-3">No custom mappings defined.</p>
+                  ) : (
+                    <div className="border border-gray-200 rounded-md overflow-hidden">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
@@ -1035,9 +1109,7 @@ const Settings: React.FC = () => {
                                         className="text-gray-500 hover:text-red-600"
                                         title={`Remove mapping from "${category}" to "${parentCategory}"`}
                                       >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                        <XIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} />
                                       </button>
                                     </div>
                                   ))}
@@ -1046,10 +1118,11 @@ const Settings: React.FC = () => {
                             </tr>
                           ))}
                       </tbody>
-                    </table>
-                  </div>
-                )
-              )}
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Default Mappings */}
@@ -1064,18 +1137,25 @@ const Settings: React.FC = () => {
               >
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-gray-900">Default Genre Mappings</h3>
-                  <svg 
-                    className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${showDefaultMappings ? 'rotate-90' : 'rotate-0'}`} 
-                    fill="currentColor" 
-                    viewBox="0 0 20 20"
-                  >
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
+                  <CaretRightIcon 
+                    size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                    weight={ICON_WEIGHTS.FILL} 
+                    className={`transition-transform duration-200 text-gray-600 ${showDefaultMappings ? 'rotate-90' : 'rotate-0'}`} 
+                  />
                 </div>
               </div>
 
-              {showDefaultMappings && !isDefaultMappingsCollapsed && (
-                <div className="border border-gray-200 rounded-md overflow-hidden">
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                !showDefaultMappings || isDefaultMappingsCollapsed
+                  ? 'max-h-0 opacity-0' 
+                  : 'max-h-[1000px] opacity-100'
+              }`}>
+                <div className={`transform transition-all duration-300 ease-in-out ${
+                  !showDefaultMappings || isDefaultMappingsCollapsed
+                    ? 'translate-y-[-10px] scale-98' 
+                    : 'translate-y-0 scale-100'
+                }`}>
+                  <div className="border border-gray-200 rounded-md overflow-hidden">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -1130,9 +1210,7 @@ const Settings: React.FC = () => {
                                         className="text-gray-400 hover:text-red-600"
                                         title={`Override default mapping from "${category}" to "${parentCategory}"`}
                                       >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                        <XIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} />
                                       </button>
                                     </div>
                                   ))}
@@ -1142,9 +1220,10 @@ const Settings: React.FC = () => {
                           ));
                       })()}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Ignored Genres */}
@@ -1156,21 +1235,28 @@ const Settings: React.FC = () => {
               >
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-gray-900">Ignored Genres</h3>
-                  <svg 
-                    className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isIgnoredCategoriesCollapsed ? 'rotate-0' : 'rotate-90'}`} 
-                    fill="currentColor" 
-                    viewBox="0 0 20 20"
-                  >
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
+                  <CaretRightIcon 
+                    size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                    weight={ICON_WEIGHTS.FILL} 
+                    className={`transition-transform duration-200 text-gray-600 ${isIgnoredCategoriesCollapsed ? 'rotate-0' : 'rotate-90'}`} 
+                  />
                 </div>
               </div>
 
-              {!isIgnoredCategoriesCollapsed && (
-                categorySettings.ignoredCategories.length === 0 ? (
-                  <p className="text-sm text-gray-500 italic p-3">No ignored genres defined.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2 p-3">
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                isIgnoredCategoriesCollapsed 
+                  ? 'max-h-0 opacity-0' 
+                  : 'max-h-[500px] opacity-100'
+              }`}>
+                <div className={`transform transition-all duration-300 ease-in-out ${
+                  isIgnoredCategoriesCollapsed 
+                    ? 'translate-y-[-10px] scale-98' 
+                    : 'translate-y-0 scale-100'
+                }`}>
+                  {categorySettings.ignoredCategories.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic p-3">No ignored genres defined.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 p-3">
                     {categorySettings.ignoredCategories.sort().map((category) => (
                       <div key={category} className="flex items-center bg-gray-100 rounded-full px-3 py-1 text-sm">
                         <span className="text-gray-800 mr-2">{category}</span>
@@ -1179,15 +1265,14 @@ const Settings: React.FC = () => {
                           className="text-gray-500 hover:text-red-600"
                           title="Remove from ignored"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                          <XIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} />
                         </button>
                       </div>
                     ))}
-                  </div>
-                )
-              )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1203,31 +1288,49 @@ const Settings: React.FC = () => {
           {/* Google Books API Connection */}
           <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Google Books API</h2>
-              <button
-                onClick={async () => {
-                  try {
-                    setConnectionStatus('checking');
-                    const result = await BookService.testConnection();
-                    if (result.success) {
-                      setConnectionStatus('connected');
-                      toast.success('Google Books API connection is working!');
-                    } else {
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-gray-900">Google Books API</h2>
+                <Tooltip content="Visit Google Books API documentation">
+                  <a 
+                    href="https://developers.google.com/books" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
+                    </svg>
+                  </a>
+                </Tooltip>
+              </div>
+              <Tooltip content="Test Connection">
+                <button
+                  onClick={async () => {
+                    try {
+                      setConnectionStatus('checking');
+                      const result = await BookService.testConnection();
+                      if (result.success) {
+                        setConnectionStatus('connected');
+                        toast.success('Google Books API connection is working!');
+                      } else {
+                        setConnectionStatus('error');
+                        toast.error(`Connection test failed: ${result.message}`);
+                      }
+                    } catch (error) {
                       setConnectionStatus('error');
-                      toast.error(`Connection test failed: ${result.message}`);
+                      toast.error('Failed to test Google Books API connection');
                     }
-                  } catch (error) {
-                    setConnectionStatus('error');
-                    toast.error('Failed to test Google Books API connection');
-                  }
-                }}
-                className="p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
-                title="Test Connection"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </button>
+                  }}
+                  className="group p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                >
+                  <LightningIcon
+                  size={ICON_CONTEXTS.SETTINGS.DEFAULT}
+                  weight={ICON_WEIGHTS.FILL}
+                  className='group-hover:animate-wiggle'
+                  />
+                </button>
+              </Tooltip>
             </div>
             {renderGoogleBooksStatus()}
           </div>
@@ -1235,30 +1338,100 @@ const Settings: React.FC = () => {
           {/* Open Library Connection */}
           <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Open Library API</h2>
-              <button
-                onClick={() => {
-                  try {
-                    setOpenLibraryStatus('checking');
-                    // Simulate an API check
-                    setTimeout(() => {
-                      setOpenLibraryStatus('connected');
-                      toast.success('Open Library API connection is working!');
-                    }, 1000);
-                  } catch (error) {
-                    setOpenLibraryStatus('error');
-                    toast.error('Failed to test Open Library API connection');
-                  }
-                }}
-                className="p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
-                title="Test Connection"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-gray-900">Open Library API</h2>
+                <Tooltip content="Visit Open Library API documentation">
+                  <a 
+                    href="https://openlibrary.org/developers/api" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
+                    </svg>
+                  </a>
+                </Tooltip>
+              </div>
+              <Tooltip content="Test Connection">
+                <button
+                  onClick={async () => {
+                    try {
+                      setOpenLibraryStatus('checking');
+                      const response = await fetch('https://openlibrary.org/search.json?q=test&limit=1');
+                      if (response.ok) {
+                        setOpenLibraryStatus('connected');
+                        toast.success('Open Library API connection is working!');
+                      } else {
+                        setOpenLibraryStatus('error');
+                        toast.error('Open Library API connection failed');
+                      }
+                    } catch (error) {
+                      setOpenLibraryStatus('error');
+                      toast.error('Failed to test Open Library API connection');
+                    }
+                  }}
+                  className="group p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                >
+                  <LightningIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} className="group-hover:animate-wiggle" />
+                </button>
+              </Tooltip>
             </div>
             {renderOpenLibraryStatus()}
+          </div>
+
+          {/* Audnexus API Connection */}
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-gray-900">Audnexus API</h2>
+                <Tooltip content="Visit Audnexus API documentation">
+                  <a 
+                    href="https://github.com/djdembeck/Audnexus" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
+                    </svg>
+                  </a>
+                </Tooltip>
+                <Tooltip content="How we get audiobook data: We search Audible for book ASINs, then use Audnexus to get detailed audiobook metadata. No API key required.">
+                  <div className="text-blue-600 cursor-help">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.94 6.94a.75.75 0 11-1.061-1.061 3 3 0 112.871 5.026v.345a.75.75 0 01-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 108.94 6.94zM10 15a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </Tooltip>
+              </div>
+              <Tooltip content="Test Connection">
+                <button
+                  onClick={async () => {
+                    try {
+                      setAudnexusStatus('checking');
+                      const response = await fetch('https://api.audnex.us/books/B073H9PF2D?region=us');
+                      if (response.ok) {
+                        setAudnexusStatus('connected');
+                        toast.success('Audnexus API connection is working!');
+                      } else {
+                        setAudnexusStatus('error');
+                        toast.error('Audnexus API connection failed');
+                      }
+                    } catch (error) {
+                      setAudnexusStatus('error');
+                      toast.error('Failed to test Audnexus API connection');
+                    }
+                  }}
+                  className="group p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                >
+                  <LightningIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.FILL} className="group-hover:animate-wiggle" />
+                </button>
+              </Tooltip>
+            </div>
+            {renderAudnexusStatus()}
           </div>
         </div>
       </div>

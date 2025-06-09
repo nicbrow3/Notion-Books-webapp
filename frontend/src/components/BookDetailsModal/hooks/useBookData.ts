@@ -486,15 +486,33 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
       return currentBook;
     }
 
-    return {
+    // Create the final book data with proper field mapping
+    const finalData = {
       ...currentBook,
       description: selectedFieldData.description || currentBook.description,
       publisher: selectedFieldData.publisher || currentBook.publisher,
       pageCount: selectedFieldData.pageCount || currentBook.pageCount,
-      publishedDate: selectedFieldData.publishedDate || currentBook.publishedDate,
+      publishedDate: selectedFieldData.releaseDate || currentBook.publishedDate,
       thumbnail: selectedFieldData.thumbnail || currentBook.thumbnail,
       audiobookData: currentBook.audiobookData,
     };
+
+    // Log the field selections being applied for debugging
+    if (fieldSelections) {
+      console.log('Applying field selections to final book data:', {
+        selections: fieldSelections,
+        selectedData: selectedFieldData,
+        finalData: {
+          description: finalData.description,
+          publisher: finalData.publisher,
+          pageCount: finalData.pageCount,
+          publishedDate: finalData.publishedDate,
+          thumbnail: finalData.thumbnail
+        }
+      });
+    }
+
+    return finalData;
   };
 
   return {

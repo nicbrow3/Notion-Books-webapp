@@ -55,8 +55,7 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     authors: '',
     description: '',
     isbn: '',
-    publishedDate: '',
-    originalPublishedDate: '',
+    releaseDate: '',
     publisher: '',
     pageCount: '',
     categories: '',
@@ -119,8 +118,7 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
       authors: '',
       description: '',
       isbn: '',
-      publishedDate: '',
-      originalPublishedDate: '',
+      releaseDate: '',
       publisher: '',
       pageCount: '',
       categories: '',
@@ -207,14 +205,27 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
       if (settings) {
         setNotionSettings(settings);
         setSelectedDatabase(settings.databaseId || '');
-        const { pageIcon, ...mappings } = settings.fieldMapping || {};
-        setFieldMappings(mappings || {
+        const { pageIcon, ...rawMappings } = settings.fieldMapping || {};
+        
+        // Migration: consolidate old date fields to releaseDate
+        let releaseDate = '';
+        if (rawMappings.releaseDate) {
+          releaseDate = rawMappings.releaseDate;
+        } else if ((rawMappings as any).publishedDate) {
+          releaseDate = (rawMappings as any).publishedDate;
+        } else if ((rawMappings as any).originalPublishedDate) {
+          releaseDate = (rawMappings as any).originalPublishedDate;
+        }
+        
+        // Filter out old date field names and create new mapping object
+        const { publishedDate: _, originalPublishedDate: __, ...cleanMappings } = rawMappings as any;
+        
+        const defaultMappings = {
           title: '',
           authors: '',
           description: '',
           isbn: '',
-          publishedDate: '',
-          originalPublishedDate: '',
+          releaseDate: '',
           publisher: '',
           pageCount: '',
           categories: '',
@@ -222,7 +233,6 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
           thumbnail: '',
           status: '',
           notes: '',
-          // Audiobook-specific fields
           audiobookPublisher: '',
           audiobookChapters: '',
           audiobookASIN: '',
@@ -230,6 +240,12 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
           audiobookDuration: '',
           audiobookURL: '',
           audiobookRating: '',
+        };
+        
+        setFieldMappings({
+          ...defaultMappings,
+          ...cleanMappings,
+          releaseDate
         });
         setUsePageIcon(pageIcon || false);
         setUseEnglishOnlySources(settings.useEnglishOnlySources ?? true); // Default to true

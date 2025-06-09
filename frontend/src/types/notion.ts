@@ -99,8 +99,7 @@ export interface BookToNotionMapping {
   authors: string; // Notion property name for authors
   description?: string; // Notion property name for description
   isbn?: string; // Notion property name for ISBN
-  publishedDate?: string; // Notion property name for published date (edition)
-  originalPublishedDate?: string; // Notion property name for original published date (first edition)
+  releaseDate?: string; // Notion property name for consolidated release/published date
   publisher?: string; // Notion property name for publisher
   pageCount?: string; // Notion property name for page count
   categories?: string; // Notion property name for categories

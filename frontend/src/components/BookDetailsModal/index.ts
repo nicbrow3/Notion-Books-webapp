@@ -1,5 +1,4 @@
 import BookInfoPanel from './BookInfoPanel';
-import CategoriesManagementPanel from './CategoriesManagementPanel';
 import CategoriesModal from './CategoriesModal';
 import BookDataTable from './BookDataTable';
 import BookDataRow from './BookDataRow';
@@ -24,7 +23,6 @@ export { formatDate } from './utils/dateUtils';
 
 export {
   BookInfoPanel,
-  CategoriesManagementPanel,
   CategoriesModal,
   BookDataTable,
   BookDataRow,

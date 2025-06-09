@@ -101,7 +101,21 @@ export const useCategoryManagement = ({
     // Only update selected categories if we're not preserving selections
     // or if this is the initial load (no current selections)
     if (!preserveSelections) {
-      setSelectedCategories(result.processed);
+      // Start with all processed categories
+      let categoriesToSelect = [...result.processed];
+      
+      // Auto-deselect location-based categories if setting is enabled
+      if (settingsToUse.autoFilterLocations) {
+        categoriesToSelect = categoriesToSelect.filter(cat => {
+          if (CategoryService.isGeographicalCategory(cat)) {
+            console.log(`Auto-deselecting location-based category: "${cat}"`);
+            return false;
+          }
+          return true;
+        });
+      }
+      
+      setSelectedCategories(categoriesToSelect);
     } else {
       // When preserving selections, filter out any categories that are no longer available
       setSelectedCategories(prev => prev.filter(selected => result.processed.includes(selected)));

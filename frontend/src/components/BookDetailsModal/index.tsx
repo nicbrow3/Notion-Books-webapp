@@ -1,6 +1,5 @@
 export { default as BookInfoPanel } from './BookInfoPanel';
 export { default as AudiobookInfoSection } from './AudiobookInfoSection';
-export { default as CategoriesManagementPanel } from './CategoriesManagementPanel';
 export { default as CategoryList } from './CategoryList';
 export { default as CategoryItem } from './CategoryItem';
 export { default as NotionFieldMappings } from './NotionFieldMappings';

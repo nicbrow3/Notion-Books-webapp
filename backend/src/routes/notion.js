@@ -20,8 +20,7 @@ const generateFieldMappings = (notionProperties) => {
     isbn10: { type: 'rich_text', priority: 2, keywords: ['isbn10', 'isbn-10'] },
     description: { type: 'rich_text', priority: 1, keywords: ['description', 'summary', 'synopsis', 'about'] },
     categories: { type: 'multi_select', priority: 1, keywords: ['category', 'categories', 'genre', 'genres', 'subject', 'subjects'] },
-    publishedDate: { type: 'date', priority: 1, keywords: ['published', 'date', 'publication', 'release', 'edition'] },
-    originalPublishedDate: { type: 'date', priority: 1, keywords: ['original', 'first', 'initial', 'debut', 'premiere'] },
+    releaseDate: { type: 'date', priority: 1, keywords: ['published', 'date', 'publication', 'release', 'edition', 'original', 'first'] },
     publisher: { type: 'select', priority: 1, keywords: ['publisher', 'publishing', 'press'] },
     pageCount: { type: 'number', priority: 1, keywords: ['pages', 'page', 'count', 'length'] },
     thumbnail: { type: 'files', priority: 2, keywords: ['cover', 'image', 'thumbnail', 'picture'] },
@@ -628,6 +627,8 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
     categories: bookData.categories,
     publishedDate: bookData.publishedDate,
     originalPublishedDate: bookData.originalPublishedDate,
+    // Consolidated releaseDate field (maps to the selected publishedDate from frontend)
+    releaseDate: bookData.publishedDate,
     publisher: bookData.publisher,
     pageCount: bookData.pageCount,
     thumbnail: bookData.thumbnail,
@@ -712,6 +713,8 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
       return isCompleteDate ? 1 : 3; // Complete original date gets priority 1, year-only gets 3
     } else if (bookField === 'publishedDate') {
       return isCompleteDate ? 2 : 4; // Complete edition date gets priority 2, year-only gets 4
+    } else if (bookField === 'releaseDate') {
+      return isCompleteDate ? 1 : 2; // Consolidated releaseDate gets high priority since it's user-selected
     }
     
     return 999;
@@ -814,6 +817,7 @@ router.post('/pages/book', requireAuth, async (req, res) => {
       publishedDateMapping: fieldMappings?.publishedDate,
       originalPublishedDateMapping: fieldMappings?.originalPublishedDate,
       audiobookPublishedDateMapping: fieldMappings?.audiobookPublishedDate,
+      releaseDateMapping: fieldMappings?.releaseDate, // New consolidated mapping
       allMappingKeys: Object.keys(fieldMappings || {}),
       allMappingValues: Object.values(fieldMappings || {}),
       problematicMappings: Object.entries(fieldMappings || {}).filter(([key, value]) => 

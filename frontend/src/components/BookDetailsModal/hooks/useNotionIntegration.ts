@@ -24,6 +24,7 @@ interface UseNotionIntegrationReturn {
   duplicateStatus: 'unknown' | 'checking' | 'duplicate' | 'unique';
   duplicateCount: number;
   existingNotionPage: { url: string; title: string } | null;
+  duplicatePages: Array<{ title: string; url: string }>;
   isAddingToNotion: boolean;
   duplicateAction: 'cancel' | 'replace' | 'keep-both' | null;
   showDuplicateModal: boolean;
@@ -58,6 +59,7 @@ export const useNotionIntegration = ({
   const [duplicateStatus, setDuplicateStatus] = useState<'unknown' | 'checking' | 'duplicate' | 'unique'>('unknown');
   const [duplicateCount, setDuplicateCount] = useState<number>(0);
   const [existingNotionPage, setExistingNotionPage] = useState<{ url: string; title: string } | null>(null);
+  const [duplicatePages, setDuplicatePages] = useState<Array<{ title: string; url: string }>>([]);
   const [isAddingToNotion, setIsAddingToNotion] = useState(false);
   const [duplicateAction, setDuplicateAction] = useState<'cancel' | 'replace' | 'keep-both' | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -96,17 +98,7 @@ export const useNotionIntegration = ({
     }
   }, [isOpen, isNotionConnected, notionSettings?.fieldMapping, notionSettings?.databaseId, tempFieldMappings, databaseProperties, loadingDatabaseProperties]);
 
-  // Auto-check for duplicates when modal opens
-  useEffect(() => {
-    if (isOpen && isNotionConnected && notionSettings?.databaseId && !hasAutoChecked.current) {
-      setTimeout(() => {
-        if (duplicateCheckButtonRef.current) {
-          hasAutoChecked.current = true;
-          duplicateCheckButtonRef.current.click();
-        }
-      }, 100);
-    }
-  }, [isOpen, isNotionConnected, notionSettings?.databaseId]);
+
 
   // Reset auto-check flag when modal closes
   useEffect(() => {
@@ -115,6 +107,7 @@ export const useNotionIntegration = ({
       setDuplicateStatus('unknown');
       setDuplicateCount(0);
       setExistingNotionPage(null);
+      setDuplicatePages([]);
       setShowDuplicateModal(false);
       setDuplicateAction(null);
     }
@@ -144,9 +137,12 @@ export const useNotionIntegration = ({
           url: existingBooks[0].url,
           title: existingBooks[0].title
         });
+        setDuplicatePages(existingBooks.map(book => ({
+          title: book.title,
+          url: book.url
+        })));
         if (showToast) {
           toast(`This book already exists in your Notion database (${existingBooks.length} match${existingBooks.length > 1 ? 'es' : ''})`, {
-            icon: '⚠️',
             duration: 4000,
           });
         }
@@ -155,6 +151,12 @@ export const useNotionIntegration = ({
         setDuplicateStatus('unique');
         setDuplicateCount(0);
         setExistingNotionPage(null);
+        setDuplicatePages([]);
+        if (showToast) {
+          toast.success('No duplicates found! This book is unique in your database.', {
+            duration: 3000,
+          });
+        }
         return 'unique';
       }
     } catch (error) {
@@ -167,15 +169,32 @@ export const useNotionIntegration = ({
     }
   }, [isNotionConnected, notionSettings]);
 
+  // Auto-check for duplicates when modal opens
+  useEffect(() => {
+    if (isOpen && isNotionConnected && notionSettings?.databaseId && !hasAutoChecked.current) {
+      setTimeout(() => {
+        hasAutoChecked.current = true;
+        checkForDuplicates(false); // Auto-check without showing toast
+      }, 100);
+    }
+  }, [isOpen, isNotionConnected, notionSettings?.databaseId, checkForDuplicates]);
+
   // Create a notion page request helper
   const createNotionRequest = (finalBookData: BookSearchResult, selectedCategories: string[]): CreateNotionPageRequest => {
+    // Don't override date fields - they should already be correct in finalBookData
     const bookDataWithSelectedCategories = {
       ...finalBookData,
       categories: selectedCategories,
+      // Keep existing date fields from finalBookData - they already reflect user's choices
+      audiobookPublishedDate: finalBookData.audiobookData?.publishedDate
+    };
+
+    console.log('Creating Notion request with finalBookData:', {
+      title: finalBookData.title,
       publishedDate: finalBookData.publishedDate,
       originalPublishedDate: finalBookData.originalPublishedDate,
       audiobookPublishedDate: finalBookData.audiobookData?.publishedDate
-    };
+    });
 
     return {
       databaseId: notionSettings!.databaseId,
@@ -419,6 +438,7 @@ export const useNotionIntegration = ({
     duplicateStatus,
     duplicateCount,
     existingNotionPage,
+    duplicatePages,
     isAddingToNotion,
     duplicateAction,
     showDuplicateModal,

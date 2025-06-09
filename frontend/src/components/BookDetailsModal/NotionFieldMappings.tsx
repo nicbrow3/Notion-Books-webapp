@@ -1,5 +1,16 @@
 import React from 'react';
 import { BookSearchResult } from '../../types/book';
+import { 
+  CaretRightIcon, 
+  CheckIcon, 
+  ArrowClockwiseIcon, 
+  SpinnerGapIcon,
+  WarningIcon,
+  CheckCircleIcon,
+  BookIcon,
+  ImageIcon
+} from '@phosphor-icons/react';
+import { ICON_CONTEXTS, ICON_WEIGHTS } from '../../constants/iconConfig';
 
 interface NotionFieldMappingsProps {
   book: BookSearchResult;
@@ -94,13 +105,11 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
       >
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-gray-900">Notion Field Mappings</h4>
-          <svg 
-            className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isCollapsed ? 'rotate-0' : 'rotate-90'}`} 
-            fill="currentColor" 
-            viewBox="0 0 20 20"
-          >
-            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-          </svg>
+          <CaretRightIcon 
+            size={ICON_CONTEXTS.UI.TABLE} 
+            weight={ICON_WEIGHTS.FILL} 
+            className={`transition-transform duration-200 text-gray-600 ${isCollapsed ? 'rotate-0' : 'rotate-90'}`} 
+          />
         </div>
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {tempFieldMappings && !hideUnsavedChangesIndicator && (
@@ -125,9 +134,10 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               className="text-green-600 hover:text-green-800 hover:bg-green-50 p-1 rounded transition-colors"
               title="Save field mapping changes"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l7-7a1 1 0 00-1.414-1.414L10 12.586l-2.293-2.293z"/>
-              </svg>
+              <CheckIcon 
+                size={ICON_CONTEXTS.UI.TABLE} 
+                weight={ICON_WEIGHTS.BOLD} 
+              />
             </button>
           )}
           {tempFieldMappings && onResetTempFieldMappings && !hideUnsavedChangesIndicator && (
@@ -136,24 +146,34 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-1 rounded transition-colors"
               title="Reset field mappings to saved settings"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-              </svg>
+              <ArrowClockwiseIcon 
+                size={ICON_CONTEXTS.UI.TABLE} 
+                weight={ICON_WEIGHTS.BOLD} 
+              />
             </button>
           )}
         </div>
       </div>
       
-      {!isCollapsed && (
-        <>
+      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+        isCollapsed 
+          ? 'max-h-0 opacity-0' 
+          : 'max-h-[2000px] opacity-100'
+      }`}>
+        <div className={`transform transition-all duration-300 ease-in-out ${
+          isCollapsed 
+            ? 'translate-y-[-10px] scale-98' 
+            : 'translate-y-0 scale-100'
+        }`}>
           {/* Loading state for database properties */}
           {loadingDatabaseProperties && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
               <div className="flex items-center">
-                <svg className="animate-spin h-4 w-4 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                <SpinnerGapIcon 
+                  size={ICON_CONTEXTS.UI.TABLE} 
+                  weight={ICON_WEIGHTS.BOLD} 
+                  className="animate-spin text-blue-600 mr-2" 
+                />
                 <span className="text-blue-800">Loading field mapping options...</span>
               </div>
             </div>
@@ -189,13 +209,9 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
                   case 'thumbnail': return book.thumbnail ? 'Available' : 'None';
                   case 'status': return 'To Read (default)';
                   case 'notes': return 'Empty (default)';
-                  // Date fields - expose all three separately
-                  case 'originalPublishedDate': 
-                    return book.originalPublishedDate ? formatDate(book.originalPublishedDate) : '';
-                  case 'publishedDate': 
+                  // Date field - consolidated releaseDate
+                  case 'releaseDate': 
                     return book.publishedDate ? formatDate(book.publishedDate) : '';
-                  case 'audiobookPublishedDate': 
-                    return book.audiobookData?.publishedDate ? formatDate(book.audiobookData.publishedDate) : '';
                   // Audiobook-specific fields
                   case 'audiobookPublisher': return book.audiobookData?.publisher || '';
                   case 'audiobookChapters': return book.audiobookData?.chapters?.toString() || book.audiobookData?.chapterCount?.toString() || '';
@@ -231,14 +247,8 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               // Helper function to format field label
               const formatFieldLabel = (fieldName: string) => {
                 // Special cases for date fields
-                if (fieldName === 'originalPublishedDate') {
-                  return 'Original Published Date';
-                }
-                if (fieldName === 'publishedDate') {
-                  return 'Edition Published Date';
-                }
-                if (fieldName === 'audiobookPublishedDate') {
-                  return 'Audiobook Published Date';
+                if (fieldName === 'releaseDate') {
+                  return 'Release Date';
                 }
                 return fieldName.replace(/([A-Z])/g, ' $1').trim();
               };
@@ -259,9 +269,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
                     case 'thumbnail': return 'Book cover image URL';
                     case 'status': return 'Reading progress status';
                     case 'notes': return 'Personal notes about the book';
-                    case 'originalPublishedDate': return 'Original publication date';
-                    case 'publishedDate': return 'Book publication date';
-                    case 'audiobookPublishedDate': return 'Audiobook release date';
+                    case 'releaseDate': return 'Book publication/release date';
                     case 'audiobookPublisher': return 'Publisher of the audiobook version';
                     case 'audiobookChapters': return 'Number of chapters in audiobook';
                     case 'audiobookASIN': return 'Amazon ASIN for audiobook';
@@ -292,9 +300,11 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
                           }}
                         />
                         <div className="w-6 h-8 bg-gradient-to-b from-blue-400 to-blue-600 rounded flex items-center justify-center shadow-sm" style={{ display: 'none' }}>
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14zM19 12h2a1 1 0 010 2h-2v2a1 1 0 01-2 0v-2h-2a1 1 0 010-2h2v-2a1 1 0 012 0v2z" />
-                          </svg>
+                          <BookIcon 
+                            size={12} 
+                            weight={ICON_WEIGHTS.FILL} 
+                            className="text-white" 
+                          />
                         </div>
                         <span className="text-xs text-gray-600">Cover image</span>
                       </div>
@@ -303,9 +313,11 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
                     return (
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-8 bg-gradient-to-b from-blue-400 to-blue-600 rounded flex items-center justify-center shadow-sm">
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14zM19 12h2a1 1 0 010 2h-2v2a1 1 0 01-2 0v-2h-2a1 1 0 010-2h2v-2a1 1 0 012 0v2z" />
-                          </svg>
+                          <BookIcon 
+                            size={12} 
+                            weight={ICON_WEIGHTS.FILL} 
+                            className="text-white" 
+                          />
                         </div>
                         <span className="text-xs text-gray-400">No cover</span>
                       </div>
@@ -332,7 +344,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               const allPossibleBookFields = [
                 'title', 'authors', 'description', 'isbn', 'publisher', 'pageCount', 
                 'categories', 'rating', 'thumbnail', 'status', 'notes',
-                'originalPublishedDate', 'publishedDate', 'audiobookPublishedDate',
+                'releaseDate',
                 'audiobookPublisher', 'audiobookChapters', 'audiobookASIN', 
                 'audiobookNarrators', 'audiobookDuration', 'audiobookURL', 'audiobookRating'
               ];
@@ -405,9 +417,11 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
                              </select>
                            ) : (
                              <>
-                               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                 <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                               </svg>
+                               <CaretRightIcon 
+                                 size={12} 
+                                 weight={ICON_WEIGHTS.FILL} 
+                                 className="mr-1" 
+                               />
                                <span className="font-medium">{notionField} ({getPropertyType(notionField)})</span>
                              </>
                            )}
@@ -443,9 +457,11 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
                              </select>
                            ) : (
                              <>
-                               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                               </svg>
+                               <WarningIcon 
+                                 size={12} 
+                                 weight={ICON_WEIGHTS.FILL} 
+                                 className="mr-1" 
+                               />
                                <span className="font-medium">Not mapped</span>
                              </>
                            )}
@@ -503,9 +519,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
           {(() => {
             const currentFieldMappings = tempFieldMappings || notionSettings.fieldMapping;
             const allPossibleFields = [
-              'originalPublishedDate',
-              'publishedDate', 
-              'audiobookPublishedDate',
+              'releaseDate',
               'audiobookPublisher',
               'audiobookChapters',
               'audiobookASIN',
@@ -517,9 +531,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
 
             const getBookValue = (bookField: string) => {
               switch (bookField) {
-                case 'originalPublishedDate': return book.originalPublishedDate;
-                case 'publishedDate': return book.publishedDate;
-                case 'audiobookPublishedDate': return book.audiobookData?.publishedDate;
+                case 'releaseDate': return book.publishedDate;
                 case 'audiobookPublisher': return book.audiobookData?.publisher;
                 case 'audiobookChapters': return book.audiobookData?.chapters || book.audiobookData?.chapterCount;
                 case 'audiobookASIN': return book.audiobookData?.asin;
@@ -536,15 +548,17 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
             );
 
             if (unmappedWithData.length > 0) {
-              const dateFields = unmappedWithData.filter(f => f.includes('PublishedDate'));
+              const dateFields = unmappedWithData.filter(f => f === 'releaseDate');
               const audiobookFields = unmappedWithData.filter(f => f.startsWith('audiobook'));
 
               return (
                 <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded text-sm">
                   <div className="flex items-start">
-                    <svg className="w-4 h-4 mr-2 text-orange-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
+                    <WarningIcon 
+                      size={ICON_CONTEXTS.UI.TABLE} 
+                      weight={ICON_WEIGHTS.FILL} 
+                      className="mr-2 text-orange-600 mt-0.5 flex-shrink-0" 
+                    />
                     <div>
                       <span className="text-orange-800 font-medium">
                         Additional data available for mapping
@@ -576,9 +590,11 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
           {notionSettings.fieldMapping.pageIcon && book.thumbnail && (
             <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-sm">
               <div className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                </svg>
+                <ImageIcon 
+                  size={ICON_CONTEXTS.UI.TABLE} 
+                  weight={ICON_WEIGHTS.FILL} 
+                  className="mr-2 text-green-600" 
+                />
                 <span className="text-green-800 font-medium">Book cover will be used as page icon</span>
               </div>
             </div>
@@ -595,9 +611,11 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
           {tempFieldMappings && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && !hideUnsavedChangesIndicator && (
             <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded text-sm">
               <div className="flex items-start">
-                <svg className="w-4 h-4 mr-2 text-orange-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
+                <WarningIcon 
+                  size={ICON_CONTEXTS.UI.TABLE} 
+                  weight={ICON_WEIGHTS.FILL} 
+                  className="mr-2 text-orange-600 mt-0.5 flex-shrink-0" 
+                />
                 <div>
                   <span className="text-orange-800 font-medium">You have unsaved field mapping changes</span>
                   <p className="text-orange-700 text-xs mt-1">
@@ -607,8 +625,8 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               </div>
             </div>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 };
