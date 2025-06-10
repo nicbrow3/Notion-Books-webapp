@@ -169,7 +169,7 @@ const CategoriesModal: React.FC<CategoriesModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 pt-2 pb-6 bg-gray-50 border-t border-gray-200 rounded-b-lg">
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
           <div className="flex justify-between items-center">
             <div className="text-sm text-gray-600">
               {selectedCategories.length} categories selected
@@ -177,13 +177,13 @@ const CategoriesModal: React.FC<CategoriesModalProps> = ({
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="px-10 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={onClose}
-                className="px-10 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
               >
                 Done
               </button>

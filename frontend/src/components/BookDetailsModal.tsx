@@ -20,7 +20,7 @@ import {
   useNotionIntegration,
   formatDate
 } from './BookDetailsModal/index';
-import { extractPlainText } from './BookDetailsModal/utils/htmlUtils';
+
 import { FieldSelections } from './BookDetailsModal/BookInfoPanel';
 
 interface BookDetailsModalProps {
@@ -35,84 +35,37 @@ interface BookDetailsModalProps {
 // Utility function to detect if text appears to be in English
 const isLikelyEnglish = (text: string): boolean => {
   if (!text || typeof text !== 'string') return false;
-  
-  // Basic heuristics for English detection:
-  // 1. Check for non-Latin characters (likely foreign language)
+
+  // 1. Reject strings that contain obvious non-Latin characters
   const hasNonLatinChars = /[^\u0000-\u024F\u1E00-\u1EFF\s\d.,;:!?'"()[\]{}\-_/\\@#$%^&*+=<>|~`]/.test(text);
   if (hasNonLatinChars) return false;
-  
-  // 2. Check for common English words
-  const commonEnglishWords = [
-    'the', 'and', 'or', 'of', 'in', 'to', 'for', 'with', 'by', 'from', 'at', 'on', 'is', 'are', 'was', 'were',
-    'fiction', 'science', 'history', 'art', 'music', 'novel', 'book', 'story', 'adventure', 'mystery', 'romance',
-    'fantasy', 'horror', 'thriller', 'drama', 'comedy', 'biography', 'memoir', 'philosophy', 'religion', 'health',
-    'business', 'education', 'children', 'young', 'adult', 'teen', 'crime', 'war', 'travel', 'cooking', 'sports'
-  ];
-  
-  const words = text.toLowerCase().split(/\s+/).filter(word => word.length > 2);
-  const englishWordCount = words.filter(word => commonEnglishWords.includes(word)).length;
-  
-  // If it contains common English words, likely English
-  if (englishWordCount > 0) return true;
-  
-  // 3. For single words or short phrases, be more lenient with common genre terms
-  if (words.length <= 2) {
-    const singleWordEnglishTerms = [
-      'fiction', 'nonfiction', 'fantasy', 'romance', 'mystery', 'thriller', 'horror', 'drama', 'comedy',
-      'biography', 'memoir', 'history', 'science', 'art', 'music', 'poetry', 'philosophy', 'religion',
-      'health', 'fitness', 'business', 'economics', 'politics', 'psychology', 'sociology', 'education',
-      'children', 'juvenile', 'young', 'adult', 'teen', 'adventure', 'action', 'crime', 'detective',
-      'war', 'military', 'historical', 'contemporary', 'classic', 'literature', 'poetry', 'anthology'
-    ];
-    
-    return words.some(word => singleWordEnglishTerms.includes(word));
+
+  // Clean tokenisation – split on anything that isn't a letter (keeps words like "sci-fi")
+  const words = text.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 0);
+
+  // 2. Quick hit list of frequent English filler words / conjunctions
+  const commonEnglishWords = new Set([
+    'the','and','or','of','in','to','for','with','by','from','at','on','is','are','was','were'
+  ]);
+  if (words.some(w => commonEnglishWords.has(w))) return true;
+
+  // 3. Domain-specific single/short genre words that we want to treat as English even if they aren't in dictionaries
+  const genreTerms = new Set([
+    'fiction','nonfiction','fantasy','romance','mystery','thriller','horror','drama','comedy','biography','memoir',
+    'history','science','art','music','poetry','philosophy','religion','health','fitness','business','economics',
+    'politics','psychology','sociology','education','children','juvenile','young','adult','teen','adventure',
+    'action','crime','detective','war','military','historical','contemporary','classic','literature','anthology',
+    'humor','humorous','paranormal','urban','suspense'
+  ]);
+
+  if (words.length <= 2 && words.every(w => genreTerms.has(w))) {
+    return true;
   }
-  
-  // 4. Fallback: if it's mostly Latin characters and not obviously foreign, assume English
-  return text.length > 0 && !hasNonLatinChars;
+
+  // 4. Fallback – all-Latin characters and not empty → assume English
+  return true;
 };
 
-// Utility function to check if a category should be automatically deselected
-const shouldDeselectedCategory = (category: string, categorySettings: any): boolean => {
-  if (!category || typeof category !== 'string') return false;
-  
-  const lowerCategory = category.toLowerCase();
-  
-  // Check for award/winner categories
-  if (lowerCategory.includes('award') || lowerCategory.includes('winner')) {
-    return true;
-  }
-  
-  // Check for "large type" categories
-  if (lowerCategory.includes('large type') || lowerCategory.includes('large print')) {
-    return true;
-  }
-  
-  // Check for location-based categories if auto-filtering is enabled
-  if (categorySettings?.autoFilterLocations) {
-    // Import the CategoryService function for location detection
-    // We'll check if it's a geographical category
-    const locationBasedGenres = [
-      'england', 'london', 'new york', 'paris', 'rome', 'italy', 'japan', 'china', 'france', 
-      'scotland', 'ireland', 'australia', 'united states', 'america', 'california', 'texas',
-      'canada', 'india', 'russia', 'germany', 'spain', 'mexico', 'brazil', 'africa',
-      'asia', 'europe', 'north america', 'south america', 'american', 'british', 'english', 
-      'french', 'german', 'italian', 'spanish', 'canadian', 'australian', 'japanese', 
-      'chinese', 'indian', 'european', 'asian', 'african', 'latin', 'nordic', 'scandinavian', 
-      'mediterranean'
-    ];
-    
-    if (locationBasedGenres.some(location => 
-      lowerCategory === location || 
-      lowerCategory.includes(location) ||
-      location.includes(lowerCategory)
-    )) {
-      return true;
-    }
-  }
-  
-  return false;
-};
 
 const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   isOpen,
@@ -167,9 +120,6 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       // Determine if we should filter for English-only categories
       const shouldFilterEnglishOnly = !notionSettings || notionSettings.useEnglishOnlySources !== false;
       
-      // Load category settings to check for auto-filtering preferences
-      const categorySettings = CategoryService.loadSettings();
-      
       // Add original book categories (with English filtering if enabled)
       (bookData.currentBook.categories || []).forEach(cat => {
         if (!shouldFilterEnglishOnly || isLikelyEnglish(cat)) {
@@ -186,7 +136,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           if (!shouldFilterEnglishOnly || isLikelyEnglish(cat)) {
             bookAndEditionCategories.add(cat);
           } else {
-            console.log(`Filtering non-English category from edition: "${cat}"`);
+            console.log(`Filtering non-English category from edition "${edition.title}": "${cat}"`);
           }
         });
       });
@@ -200,7 +150,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
             if (!shouldFilterEnglishOnly || isLikelyEnglish(genreName)) {
               audiobookGenres.add(genreName);
             } else {
-              console.log(`Filtering non-English audiobook genre: "${genreName}"`);
+              console.log(`Filtering non-English audiobook genre for "${bookData.currentBook.title}": "${genreName}"`);
             }
           }
         });
@@ -240,10 +190,24 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       });
       
       console.log(`Final category count: ${filteredCategories.length} (filtered out ${uniqueCategories.length - filteredCategories.length} unwanted categories)`);
-      
-      categoryManagement.setRawCategories(filteredCategories);
+
+      // Only update state if categories actually changed to avoid render loops
+      const prevCategories = categoryManagement.rawCategories;
+      const areArraysEqual = (a: string[], b: string[]) =>
+        a.length === b.length && a.every((val, idx) => val === b[idx]);
+
+      if (!areArraysEqual(filteredCategories, prevCategories)) {
+        categoryManagement.setRawCategories(filteredCategories);
+      }
     }
-  }, [bookData.editions, bookData.currentBook.categories, bookData.currentBook.audiobookData?.genres, categoryManagement.setRawCategories, notionSettings?.useEnglishOnlySources]);
+  }, [
+    bookData.editions,
+    bookData.currentBook.categories,
+    bookData.currentBook.audiobookData?.genres,
+    notionSettings?.useEnglishOnlySources,
+    categoryManagement.rawCategories,
+    categoryManagement.setRawCategories
+  ]);
 
   // Handler for "Add another book" button
   const handleAddAnotherBook = () => {
@@ -305,86 +269,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   // Handler for source selection
   const handleSourceSelected = (value: string | number) => {
     if (editingField) {
-      console.log(`Selected source "${value}" for field "${editingField}"`);
-      
-      // Update field selections based on the chosen source
-      const currentSelections = bookData.fieldSelections || {} as FieldSelections;
-      const newSelections = {
-        ...currentSelections,
-        [editingField]: value
-      };
-      
-      // Get updated selected data
-      const getUpdatedSelectedData = () => {
-        const selectedData: any = {};
-        
-        Object.keys(newSelections).forEach(fieldKey => {
-          const selection = newSelections[fieldKey as keyof typeof newSelections];
-          
-          if (fieldKey === 'thumbnail') {
-            if (selection === 'audiobook' && bookData.currentBook.audiobookData?.image) {
-              selectedData.thumbnail = bookData.currentBook.audiobookData.image;
-            } else if (typeof selection === 'number' && bookData.editions && bookData.editions[selection]?.thumbnail) {
-              selectedData.thumbnail = bookData.editions[selection].thumbnail;
-            } else {
-              selectedData.thumbnail = bookData.currentBook.thumbnail;
-            }
-          }
-          else if (fieldKey === 'description') {
-            if (selection === 'audiobook' && bookData.currentBook.audiobookData?.description) {
-              // Clean HTML from audiobook description for Notion
-              selectedData.description = extractPlainText(bookData.currentBook.audiobookData.description);
-            } else if (selection === 'audiobook_summary' && bookData.currentBook.audiobookData?.summary) {
-              // Clean HTML from audiobook summary for Notion
-              selectedData.description = extractPlainText(bookData.currentBook.audiobookData.summary);
-            } else if (typeof selection === 'number' && bookData.editions && bookData.editions[selection]?.description) {
-              selectedData.description = bookData.editions[selection].description;
-            } else {
-              selectedData.description = bookData.currentBook.description;
-            }
-          }
-          else if (fieldKey === 'publisher') {
-            if (selection === 'audiobook' && bookData.currentBook.audiobookData?.publisher) {
-              selectedData.publisher = bookData.currentBook.audiobookData.publisher;
-            } else if (typeof selection === 'number' && bookData.editions && bookData.editions[selection]?.publisher) {
-              selectedData.publisher = bookData.editions[selection].publisher;
-            } else {
-              selectedData.publisher = bookData.currentBook.publisher;
-            }
-          }
-          else if (fieldKey === 'releaseDate') {
-            if (selection === 'audiobook' && bookData.currentBook.audiobookData?.publishedDate) {
-              selectedData.releaseDate = bookData.currentBook.audiobookData.publishedDate;
-            } else if (typeof selection === 'number' && bookData.editions && bookData.editions[selection]?.publishedDate) {
-              selectedData.releaseDate = bookData.editions[selection].publishedDate;
-            } else {
-              selectedData.releaseDate = bookData.currentBook.publishedDate;
-            }
-          }
-          else if (fieldKey === 'pageCount') {
-            if (typeof selection === 'number' && bookData.editions && bookData.editions[selection]?.pageCount) {
-              selectedData.pageCount = bookData.editions[selection].pageCount;
-            } else {
-              selectedData.pageCount = bookData.currentBook.pageCount;
-            }
-          }
-        });
-        
-        return selectedData;
-      };
-      
-      const updatedSelectedData = getUpdatedSelectedData();
-      bookData.setFieldSelections(newSelections);
-      bookData.setSelectedFieldData(updatedSelectedData);
-      
-      // Debug logging to track field selection changes
-      console.log(`Field selection updated for ${editingField}:`, {
-        selectedSource: value,
-        newData: updatedSelectedData[editingField],
-        allSelectedData: updatedSelectedData
-      });
-      
-      toast.success(`Updated ${editingField} to use ${value} source`);
+      bookData.updateFieldSelection(editingField, value);
     }
     setIsSourceModalOpen(false);
     setEditingField(null);
@@ -498,6 +383,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
               openAudiobookSearch={openAudiobookSearch}
               loadingAudiobook={bookData.loadingAudiobook}
               onOpenCategoriesModal={() => setIsCategoriesModalOpen(true)}
+              getFieldSources={bookData.getFieldSources}
             />
           </div>
         </div>
@@ -597,27 +483,13 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           sources={bookData.getFieldSources(editingField)}
           selectedValue={(() => {
             // Get the current selection for this field
-            if (bookData.fieldSelections) {
-              switch (editingField) {
-                case 'description':
-                  return bookData.fieldSelections.description || CategoryService.getFieldDefault('description') || 'original';
-                case 'publisher':
-                  return bookData.fieldSelections.publisher || CategoryService.getFieldDefault('publisher') || 'original';
-                case 'pageCount':
-                  return bookData.fieldSelections.pageCount || CategoryService.getFieldDefault('pagecount') || 'original';
-                case 'releaseDate':
-                  return bookData.fieldSelections.releaseDate || CategoryService.getFieldDefault('releaseDate') || 'original';
-                case 'isbn':
-                  return bookData.fieldSelections.isbn || CategoryService.getFieldDefault('isbn') || 'original';
-                case 'thumbnail':
-                  return bookData.fieldSelections.thumbnail || CategoryService.getFieldDefault('thumbnail') || 'original';
-                default:
-                  return CategoryService.getFieldDefault(editingField.toLowerCase()) || 'original';
-              }
+            if (bookData.fieldSelections && bookData.fieldSelections[editingField as keyof FieldSelections] !== undefined) {
+              return bookData.fieldSelections[editingField as keyof FieldSelections];
             }
             
             // If no fieldSelections yet, check for saved defaults
-            const savedDefault = CategoryService.getFieldDefault(editingField.toLowerCase());
+            const fieldNameForDefault = editingField === 'pageCount' ? 'pagecount' : editingField;
+            const savedDefault = CategoryService.getFieldDefault(fieldNameForDefault.toLowerCase());
             
             // For audiobook-related fields, only use audiobook default if audiobook data is actually loaded
             if (savedDefault === 'audiobook' && editingField !== 'pageCount') {

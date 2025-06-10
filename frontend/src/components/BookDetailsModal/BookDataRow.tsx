@@ -1,6 +1,8 @@
 import React from 'react';
 import { BookSearchResult } from '../../types/book';
 import { FieldSelections } from './BookInfoPanel';
+import { CategoryService } from '../../services/categoryService';
+import { extractPlainText } from './utils/htmlUtils';
 
 interface BookDataField {
   id: string;
@@ -68,42 +70,44 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
     if (sources.length <= 1) {
       return sources.length === 1 ? sources[0].label : 'No source';
     }
-    
-    // Find the currently selected source based on field selections
-    if (fieldSelections) {
-      // Type-safe access to field selections
-      let selectedValue: string | number | undefined;
-      
-      switch (field.id) {
-        case 'description':
-          selectedValue = fieldSelections.description;
-          break;
-        case 'publisher':
-          selectedValue = fieldSelections.publisher;
-          break;
-        case 'pageCount':
-          selectedValue = fieldSelections.pageCount;
-          break;
-        case 'releaseDate':
-          selectedValue = fieldSelections.releaseDate;
-          break;
-        case 'isbn':
-          selectedValue = fieldSelections.isbn;
-          break;
-        case 'thumbnail':
-          selectedValue = fieldSelections.thumbnail;
-          break;
-        default:
-          selectedValue = undefined;
-      }
-      
-      if (selectedValue !== undefined) {
-        const currentSource = sources.find(source => source.value === selectedValue);
-        return currentSource?.label || sources[0]?.label || 'No source';
+
+    let selectedValue: string | number | undefined;
+
+    // 1. Check for an explicit user selection for this field
+    if (fieldSelections && fieldSelections[field.id as keyof FieldSelections] !== undefined) {
+      selectedValue = fieldSelections[field.id as keyof FieldSelections];
+    }
+
+    // 2. If no selection, check for a saved default preference
+    if (selectedValue === undefined) {
+      const fieldNameForDefault = (field.id === 'pageCount' ? 'pagecount' : field.id).toLowerCase();
+      const savedDefault = CategoryService.getFieldDefault(fieldNameForDefault);
+      if (savedDefault) {
+        // Ensure the default source is actually available for this book
+        if (sources.some(s => s.value === savedDefault)) {
+          selectedValue = savedDefault;
+        }
       }
     }
     
-    // If no field selection, default to first source (usually 'original')
+    // 3. If still no selection, default to 'original'
+    if (selectedValue === undefined) {
+      selectedValue = 'original';
+    }
+
+    // Find the source that matches the selected value
+    const matchingSource = sources.find(source => source.value === selectedValue);
+    
+    if (matchingSource) {
+      return matchingSource.label;
+    }
+
+    // Fallback logic
+    const originalSource = sources.find(source => source.value === 'original');
+    if (originalSource) {
+      return originalSource.label;
+    }
+    
     return sources[0]?.label || 'No source';
   };
 
@@ -136,11 +140,67 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
     
     // Handle special cases
     if (field.id === 'description' && value.length > 100) {
+      // Clean HTML tags from description and truncate
+      const cleanText = extractPlainText(value);
       return (
-        <span className="text-sm" title={value}>
-          {value.substring(0, 100)}...
+        <span className="text-sm" title={cleanText}>
+          {cleanText.substring(0, 100)}...
         </span>
       );
+    }
+    
+    // Format release dates to remove timestamp portion
+    if (field.id === 'releaseDate') {
+      const formatDate = (dateString: string) => {
+        if (!dateString) return '';
+        
+        try {
+          // Remove time portion if present (T00:00:00.000Z)
+          const cleanDate = dateString.split('T')[0];
+          
+          // Check if it's just a year (4 digits) - show only the year
+          if (/^\d{4}$/.test(cleanDate.trim())) {
+            return cleanDate.trim();
+          }
+          
+          // Check if it's in YYYY-MM-DD format to avoid timezone issues
+          const isoDateMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (isoDateMatch) {
+            const [, year, month, day] = isoDateMatch;
+            // Use UTC to prevent the date from shifting due to timezone differences
+            const date = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
+            return date.toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: '2-digit',
+              timeZone: 'UTC'
+            });
+          }
+          
+          // Try to parse the full date from original string to preserve timezone if available
+          const date = new Date(dateString);
+          
+          // Check if the date is valid
+          if (isNaN(date.getTime())) {
+            // If invalid date but contains a year, extract and use just the year
+            const yearMatch = cleanDate.match(/\d{4}/);
+            if (yearMatch) {
+              return yearMatch[0];
+            }
+            return dateString; // Return original if we can't parse anything
+          }
+          
+          return date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: '2-digit'
+          });
+        } catch {
+          return dateString;
+        }
+      };
+      
+      return <span className="text-sm">{formatDate(value)}</span>;
     }
     
     if (field.id === 'categories') {

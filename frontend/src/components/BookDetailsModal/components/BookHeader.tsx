@@ -38,6 +38,7 @@ const BookHeader: React.FC<BookHeaderProps> = ({
             title={getFieldSources('thumbnail').length > 1 ? "Select cover image source" : "Only one cover source available"}
           >
             <img 
+              key={`thumbnail-${fieldSelections?.thumbnail || 'original'}-${book.thumbnail}`}
               src={book.thumbnail} 
               alt={`Cover of ${book.title}`}
               className={`w-full h-full rounded-lg shadow-md group-hover:opacity-90 transition-opacity ${

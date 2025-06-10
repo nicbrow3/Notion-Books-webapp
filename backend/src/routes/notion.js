@@ -666,7 +666,9 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
     publishedDate: bookData.publishedDate,
     editionPublishedDate: bookData.editionPublishedDate,
     originalPublishedDate: bookData.originalPublishedDate,
-    thumbnail: bookData.thumbnail
+    thumbnail: bookData.thumbnail,
+    thumbnailLength: bookData.thumbnail ? bookData.thumbnail.length : 'null',
+    thumbnailType: typeof bookData.thumbnail
   });
 
   // ⚠️ CRITICAL DEBUGGING: Trace exactly what date values we received

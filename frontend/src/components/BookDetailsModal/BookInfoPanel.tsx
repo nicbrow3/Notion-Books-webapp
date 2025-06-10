@@ -101,6 +101,12 @@ const ThumbnailSelector: React.FC<ThumbnailSelectorProps> = ({
     setPreferAudiobook(newValue);
     // Save the preference
     CategoryService.savePreferAudiobookCovers(newValue);
+    
+    // If user just enabled the preference and we have an audiobook cover, switch to it immediately
+    if (newValue && book.audiobookData?.hasAudiobook && book.audiobookData.image && selectedValue !== 'audiobook') {
+      onSelect('audiobook');
+      console.log('🎵 Immediately switched to audiobook cover due to preference checkbox');
+    }
   };
 
   return (

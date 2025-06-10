@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { BookSearchResult, BookEdition, BookEditionsResponse } from '../../../types/book';
+import { BookSearchResult, BookEdition, BookEditionsResponse, AudiobookData } from '../../../types/book';
 import { BookService } from '../../../services/bookService';
 import { CategoryService } from '../../../services/categoryService';
 import { FieldSelections } from '../BookInfoPanel';
+import { extractPlainText } from '../utils/htmlUtils';
+import { toast } from 'react-hot-toast';
 
 interface UseBookDataProps {
   book: BookSearchResult;
@@ -17,14 +19,54 @@ interface UseBookDataReturn {
   loadingEditions: boolean;
   loadingAudiobook: boolean;
   fieldSelections: FieldSelections | null;
-  selectedFieldData: any;
-  setFieldSelections: (selections: FieldSelections | null) => void;
-  setSelectedFieldData: (data: any) => void;
+  getFinalBookData: () => BookSearchResult;
   fetchAllEditionsCategories: () => Promise<void>;
   fetchAudiobookData: () => Promise<void>;
-  getFinalBookData: () => BookSearchResult;
   getFieldSources: (fieldId: string) => Array<{value: string | number, label: string, content: string}>;
+  updateFieldSelection: (fieldId: string, value: string | number) => void;
 }
+
+const formatDate = (dateString?: string | null) => {
+  if (!dateString) return '';
+  
+  try {
+    const cleanDate = dateString.split('T')[0];
+    
+    if (/^\d{4}$/.test(cleanDate.trim())) {
+      return cleanDate.trim();
+    }
+    
+    const isoDateMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoDateMatch) {
+      const [, year, month, day] = isoDateMatch;
+      const date = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: '2-digit',
+        timeZone: 'UTC'
+      });
+    }
+    
+    const date = new Date(dateString);
+    
+    if (isNaN(date.getTime())) {
+      const yearMatch = cleanDate.match(/\d{4}/);
+      if (yearMatch) {
+        return yearMatch[0];
+      }
+      return dateString;
+    }
+    
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: '2-digit'
+    });
+  } catch {
+    return dateString;
+  }
+};
 
 export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps): UseBookDataReturn => {
   const [currentBook, setCurrentBook] = useState<BookSearchResult>(book);
@@ -32,62 +74,160 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
   const [loadingEditions, setLoadingEditions] = useState(false);
   const [loadingAudiobook, setLoadingAudiobook] = useState(false);
   const [fieldSelections, setFieldSelections] = useState<FieldSelections | null>(null);
-  const [selectedFieldData, setSelectedFieldData] = useState<any>(null);
-  
-  const hasInitializedFieldSelectionsRef = useRef<boolean>(false);
 
-  // Initialize book when prop changes
+  // When the modal is opened with a new book, reset the state
   useEffect(() => {
-    if (book) {
+    if (isOpen) {
       setCurrentBook(book);
-      hasInitializedFieldSelectionsRef.current = false;
+      setEditions([]);
+      setFieldSelections(null);
     }
-  }, [book]);
+  }, [isOpen, book]);
 
-  // Format date helper
-  const formatDate = (dateString?: string | null) => {
-    if (!dateString) return '';
+  const getFinalBookData = useCallback(() => {
+    const finalData = { ...currentBook };
     
-    try {
-      const cleanDate = dateString.split('T')[0];
-      
-      if (/^\d{4}$/.test(cleanDate.trim())) {
-        return cleanDate.trim();
+    if (!fieldSelections) {
+      // Before any selections are made, check if audiobook data is present
+      // and if its cover should be preferred.
+      if (currentBook.audiobookData?.image && CategoryService.getPreferAudiobookCovers()) {
+        finalData.thumbnail = currentBook.audiobookData.image;
       }
-      
-      const isoDateMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (isoDateMatch) {
-        const [, year, month, day] = isoDateMatch;
-        const date = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
-        return date.toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'short', 
-          day: '2-digit',
-          timeZone: 'UTC'
-        });
-      }
-      
-      const date = new Date(dateString);
-      
-      if (isNaN(date.getTime())) {
-        const yearMatch = cleanDate.match(/\d{4}/);
-        if (yearMatch) {
-          return yearMatch[0];
-        }
-        return dateString;
-      }
-      
-      return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: '2-digit'
-      });
-    } catch {
-      return dateString;
+      return finalData;
     }
-  };
 
-  // Fetch all editions and their categories
+    Object.keys(fieldSelections).forEach(fieldKey => {
+      const selection = fieldSelections[fieldKey as keyof typeof fieldSelections];
+      
+      switch (fieldKey) {
+        case 'thumbnail':
+          if (selection === 'audiobook' && currentBook.audiobookData?.image) {
+            finalData.thumbnail = currentBook.audiobookData.image;
+          } else if (typeof selection === 'number' && editions[selection]?.thumbnail) {
+            finalData.thumbnail = editions[selection].thumbnail;
+          } else {
+            finalData.thumbnail = book.thumbnail; // Fallback to original book thumbnail
+          }
+          break;
+        case 'description':
+          if (selection === 'audiobook' && currentBook.audiobookData?.description) {
+            finalData.description = extractPlainText(currentBook.audiobookData.description);
+          } else if (selection === 'audiobook_summary' && currentBook.audiobookData?.summary) {
+            finalData.description = extractPlainText(currentBook.audiobookData.summary);
+          } else if (typeof selection === 'number' && editions[selection]?.description) {
+            finalData.description = editions[selection].description;
+          } else {
+            finalData.description = book.description;
+          }
+          break;
+        case 'publisher':
+          if (selection === 'audiobook' && currentBook.audiobookData?.publisher) {
+            finalData.publisher = currentBook.audiobookData.publisher;
+          } else if (typeof selection === 'number' && editions[selection]?.publisher) {
+            finalData.publisher = editions[selection].publisher;
+          } else {
+            finalData.publisher = book.publisher;
+          }
+          break;
+        case 'releaseDate':
+          if (selection === 'audiobook' && currentBook.audiobookData?.publishedDate) {
+            finalData.publishedDate = currentBook.audiobookData.publishedDate;
+          } else if (typeof selection === 'number' && editions[selection]?.publishedDate) {
+            finalData.publishedDate = editions[selection].publishedDate;
+          } else {
+            finalData.publishedDate = book.publishedDate;
+          }
+          break;
+        case 'pageCount':
+          if (typeof selection === 'number' && editions[selection]?.pageCount) {
+            finalData.pageCount = editions[selection].pageCount;
+          } else {
+            finalData.pageCount = book.pageCount;
+          }
+          break;
+      }
+    });
+
+    return finalData;
+  }, [currentBook, editions, fieldSelections, book]);
+
+  const updateFieldSelection = useCallback((fieldId: string, value: string | number) => {
+    const newSelections: FieldSelections = {
+      ...(fieldSelections || {
+        description: 'original',
+        publisher: 'original',
+        pageCount: 'original',
+        releaseDate: 'original',
+        thumbnail: 'original',
+      } as FieldSelections),
+      [fieldId]: value,
+    };
+    
+    setFieldSelections(newSelections);
+    
+    console.log(`Field selection updated for ${fieldId} to "${value}"`);
+    toast.success(`Updated ${fieldId} source`);
+  }, [fieldSelections]);
+  
+  // Smartly select default sources when new data (audiobook/editions) is loaded
+  useEffect(() => {
+    if (!isOpen || (!currentBook.audiobookData && editions.length === 0)) return;
+
+    let needsUpdate = false;
+    const preferAudiobookCovers = CategoryService.getPreferAudiobookCovers();
+    const savedDescriptionDefault = CategoryService.getFieldDefault('description');
+    const savedPublisherDefault = CategoryService.getFieldDefault('publisher');
+    const savedReleaseDateDefault = CategoryService.getFieldDefault('releaseDate');
+    const savedThumbnailDefault = CategoryService.getFieldDefault('thumbnail');
+    
+    const updatedSelections: FieldSelections = { 
+      ...(fieldSelections || {
+        description: 'original',
+        publisher: 'original',
+        pageCount: 'original',
+        releaseDate: 'original',
+        thumbnail: 'original',
+      })
+    } as FieldSelections;
+
+    // Handle Audiobook Data
+    if (currentBook.audiobookData) {
+      if (currentBook.audiobookData.image) {
+        const currentSelection = fieldSelections?.thumbnail;
+        const shouldSelectAudiobookCover = !currentSelection || 
+                                           currentSelection === 'original' || 
+                                           preferAudiobookCovers || 
+                                           savedThumbnailDefault === 'audiobook';
+
+        if (shouldSelectAudiobookCover && updatedSelections.thumbnail !== 'audiobook') {
+          updatedSelections.thumbnail = 'audiobook';
+          needsUpdate = true;
+          console.log('🎵 Auto-selecting audiobook cover.');
+        }
+      }
+
+      if (savedDescriptionDefault === 'audiobook' && currentBook.audiobookData.description && updatedSelections.description !== 'audiobook') {
+        updatedSelections.description = 'audiobook';
+        needsUpdate = true;
+      }
+      
+      if (savedPublisherDefault === 'audiobook' && currentBook.audiobookData.publisher && updatedSelections.publisher !== 'audiobook') {
+        updatedSelections.publisher = 'audiobook';
+        needsUpdate = true;
+      }
+      
+      if ((savedReleaseDateDefault === 'audiobook' || currentBook.audiobookData.isEarlierDate) && currentBook.audiobookData.publishedDate && updatedSelections.releaseDate !== 'audiobook') {
+        updatedSelections.releaseDate = 'audiobook';
+        needsUpdate = true;
+      }
+    }
+
+    if (needsUpdate) {
+      console.log('✨ Auto-selection needs update. New selections:', updatedSelections);
+      setFieldSelections(updatedSelections);
+    }
+  }, [isOpen, currentBook.audiobookData, editions]);
+
   const fetchAllEditionsCategories = useCallback(async () => {
     if (!currentBook.openLibraryKey) return;
 
@@ -243,7 +383,7 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
       
       setCurrentBook(bookWithAudiobook);
       if (bookWithAudiobook.audiobookData?.hasAudiobook) {
-        console.log(`Audiobook data loaded for: "${currentBook.title}"`);
+        // console.log(`Audiobook data loaded for: "${currentBook.title}"`);
       }
     } catch (error) {
       console.error('❌ Failed to fetch audiobook data:', error);
@@ -260,259 +400,131 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
     }
   }, [currentBook.title, currentBook.authors]);
 
-  // Initialize field selections based on saved defaults after audiobook data is loaded
-  useEffect(() => {
-    if (!isOpen || hasInitializedFieldSelectionsRef.current) return;
-    
-    if (loadingAudiobook) return;
-    
-    const initializeFieldSelections = () => {
-      const initialSelections: any = {};
-      let hasSelections = false;
-      
-      const fieldNames = ['description', 'publisher', 'pagecount', 'releaseDate', 'thumbnail'];
-       
-      fieldNames.forEach(fieldName => {
-        const savedDefault = CategoryService.getFieldDefault(fieldName);
-        if (savedDefault && savedDefault !== 'original') {
-          const selectionKey = fieldName === 'pagecount' ? 'pageCount' : fieldName;
-          
-          if (savedDefault === 'audiobook') {
-            let hasAudiobookData = false;
-            
-            switch (fieldName) {
-              case 'description':
-                hasAudiobookData = !!(currentBook.audiobookData?.description || currentBook.audiobookData?.summary);
-                break;
-              case 'thumbnail':
-                hasAudiobookData = !!currentBook.audiobookData?.image;
-                break;
-              case 'publisher':
-                hasAudiobookData = !!currentBook.audiobookData?.publisher;
-                break;
-              case 'releaseDate':
-                hasAudiobookData = !!currentBook.audiobookData?.publishedDate;
-                break;
-            }
-            
-            if (hasAudiobookData) {
-              initialSelections[selectionKey] = savedDefault;
-              hasSelections = true;
-            }
-          } else {
-            let hasData = false;
-            
-            if (typeof savedDefault === 'number') {
-              if (editions && editions[savedDefault]) {
-                switch (fieldName) {
-                  case 'description':
-                    hasData = !!editions[savedDefault].description;
-                    break;
-                  case 'publisher':
-                    hasData = !!editions[savedDefault].publisher;
-                    break;
-                  case 'releaseDate':
-                    hasData = !!editions[savedDefault].publishedDate;
-                    break;
-                  case 'pagecount':
-                    hasData = !!editions[savedDefault].pageCount;
-                    break;
-                  case 'thumbnail':
-                    hasData = !!editions[savedDefault].thumbnail;
-                    break;
-                }
-              }
-            } else {
-              hasData = true;
-            }
-            
-            if (hasData) {
-              initialSelections[selectionKey] = savedDefault;
-              hasSelections = true;
-            }
-          }
-        }
-      });
-      
-      if (hasSelections) {
-        setFieldSelections(initialSelections);
-        
-        const getSelectedDataForInitialSelections = () => {
-          const selectedData: any = {};
-          
-          Object.keys(initialSelections).forEach(fieldKey => {
-            const selection = initialSelections[fieldKey];
-            
-            if (fieldKey === 'thumbnail') {
-              if (selection === 'audiobook' && currentBook.audiobookData?.image) {
-                selectedData.thumbnail = currentBook.audiobookData.image;
-              } else if (typeof selection === 'number' && editions && editions[selection]?.thumbnail) {
-                selectedData.thumbnail = editions[selection].thumbnail;
-              }
-            } else if (fieldKey === 'description') {
-              if (selection === 'audiobook' && currentBook.audiobookData?.description) {
-                selectedData.description = currentBook.audiobookData.description;
-              } else if (selection === 'audiobook_summary' && currentBook.audiobookData?.summary) {
-                selectedData.description = currentBook.audiobookData.summary;
-              } else if (typeof selection === 'number' && editions && editions[selection]?.description) {
-                selectedData.description = editions[selection].description;
-              }
-            } else if (fieldKey === 'publisher') {
-              if (selection === 'audiobook' && currentBook.audiobookData?.publisher) {
-                selectedData.publisher = currentBook.audiobookData.publisher;
-              } else if (typeof selection === 'number' && editions && editions[selection]?.publisher) {
-                selectedData.publisher = editions[selection].publisher;
-              } else {
-                selectedData.publisher = currentBook.publisher;
-              }
-            } else if (fieldKey === 'releaseDate') {
-              if (selection === 'audiobook' && currentBook.audiobookData?.publishedDate) {
-                selectedData.releaseDate = currentBook.audiobookData.publishedDate;
-              } else if (typeof selection === 'number' && editions && editions[selection]?.publishedDate) {
-                selectedData.releaseDate = editions[selection].publishedDate;
-              } else {
-                selectedData.releaseDate = currentBook.publishedDate;
-              }
-            } else if (fieldKey === 'pageCount') {
-              if (typeof selection === 'number' && editions && editions[selection]?.pageCount) {
-                selectedData.pageCount = editions[selection].pageCount;
-              } else {
-                selectedData.pageCount = currentBook.pageCount;
-              }
-            }
-          });
-          
-          return selectedData;
-        };
-        
-        const initialSelectedData = getSelectedDataForInitialSelections();
-        if (Object.keys(initialSelectedData).length > 0) {
-          setSelectedFieldData(initialSelectedData);
-        }
-        
-        console.log('Initialized field selections based on saved defaults:', initialSelections);
-      }
-    };
-    
-    initializeFieldSelections();
-    hasInitializedFieldSelectionsRef.current = true;
-  }, [isOpen, loadingAudiobook, currentBook.audiobookData, editions]);
-
-  // Reset field selections initialization flag when book changes
-  useEffect(() => {
-    hasInitializedFieldSelectionsRef.current = false;
-  }, [book.id]);
-
-  // Helper function to get sources for a specific field
+  // Function to get available sources for a field
   const getFieldSources = (fieldId: string) => {
-    const sources = [];
-    
-    const getMainValue = (field: string): string | null => {
+    const sources: Array<{value: string | number, label: string, content: any}> = [];
+
+    // Helper to get the value from the main book object
+    const getMainValue = (field: string): any => {
       switch (field) {
-        case 'title': return currentBook.title || null;
-        case 'description': return currentBook.description || null;
-        case 'publisher': return currentBook.publisher || null;
-        case 'releaseDate': return currentBook.publishedDate || null;
-        case 'pageCount': return currentBook.pageCount?.toString() || null;
-        case 'thumbnail': return currentBook.thumbnail || null;
+        case 'title': return currentBook.title;
+        case 'authors': return currentBook.authors?.join(', ');
+        case 'description': return currentBook.description;
+        case 'publisher': return currentBook.publisher;
+        case 'releaseDate': return currentBook.publishedDate;
+        case 'pageCount': return currentBook.pageCount;
+        case 'thumbnail': return currentBook.thumbnail;
+        case 'isbn13': return currentBook.isbn13;
+        case 'isbn10': return currentBook.isbn10;
+        case 'rating': return currentBook.averageRating;
+        case 'categories': return currentBook.categories?.length ? `${currentBook.categories.length} categories` : null;
+        // Audiobook-specific fields
+        case 'audiobookPublisher': return currentBook.audiobookData?.publisher;
+        case 'audiobookNarrators': 
+          if (currentBook.audiobookData?.narrators) {
+            if (Array.isArray(currentBook.audiobookData.narrators)) {
+              return currentBook.audiobookData.narrators.join(', ');
+            }
+            return String(currentBook.audiobookData.narrators);
+          }
+          return null;
+        case 'audiobookDuration': 
+          if (currentBook.audiobookData?.totalDurationHours) {
+            return currentBook.audiobookData.totalDurationHours < 1 
+              ? `${Math.round(currentBook.audiobookData.totalDurationHours * 60)} min`
+              : `${currentBook.audiobookData.totalDurationHours.toFixed(1)} hrs`;
+          }
+          return currentBook.audiobookData?.duration;
+        case 'audiobookChapters': 
+          return currentBook.audiobookData?.chapters?.toString() || currentBook.audiobookData?.chapterCount?.toString();
+        case 'audiobookRating': 
+          if (currentBook.audiobookData?.rating) {
+            return currentBook.audiobookData.ratingCount 
+              ? `${currentBook.audiobookData.rating}/5 (${currentBook.audiobookData.ratingCount} reviews)`
+              : `${currentBook.audiobookData.rating}/5`;
+          }
+          return null;
+        case 'audiobookASIN': return currentBook.audiobookData?.asin;
+        case 'audiobookURL': return currentBook.audiobookData?.audibleUrl;
         default: return null;
       }
     };
 
     const mainValue = getMainValue(fieldId);
 
-    if (mainValue) {
+    // Always add the main book source if it has a value.
+    // For audiobook fields, use "Audiobook" as the label instead of "Original Book"
+    if (mainValue !== null && mainValue !== undefined && mainValue !== '') {
+      const isAudiobookField = fieldId.startsWith('audiobook');
       sources.push({
         value: 'original',
-        label: 'Original Book',
-        content: mainValue
+        label: isAudiobookField ? 'Audiobook' : 'Original Book',
+        content: mainValue,
       });
     }
 
-    if (currentBook.audiobookData) {
-      let audiobookValue: string | null = null;
-      switch (fieldId) {
-        case 'description': audiobookValue = currentBook.audiobookData.description || null; break;
-        case 'thumbnail': audiobookValue = currentBook.audiobookData.image || null; break;
-        case 'publisher': audiobookValue = currentBook.audiobookData.publisher || null; break;
-        case 'releaseDate': audiobookValue = currentBook.audiobookData.publishedDate || null; break;
+    // Special handling for releaseDate to gather all date-related fields
+    if (fieldId === 'releaseDate') {
+      if (currentBook.originalPublishedDate && currentBook.originalPublishedDate !== mainValue) {
+        sources.push({ value: 'first_published', label: 'First Published', content: formatDate(currentBook.originalPublishedDate) });
       }
-      
-      if (audiobookValue && audiobookValue !== mainValue) {
-        sources.push({
-          value: 'audiobook',
-          label: fieldId === 'thumbnail' ? 'Audiobook Cover' : 'Audiobook',
-          content: audiobookValue
-        });
+      if (currentBook.audiobookData?.publishedDate && currentBook.audiobookData.publishedDate !== mainValue) {
+        sources.push({ value: 'audiobook', label: 'Audiobook', content: formatDate(currentBook.audiobookData.publishedDate) });
       }
-      
-      if (fieldId === 'description' && currentBook.audiobookData.summary && currentBook.audiobookData.summary !== mainValue && currentBook.audiobookData.summary !== audiobookValue) {
-        sources.push({
-          value: 'audiobook_summary',
-          label: 'Audiobook Summary',
-          content: currentBook.audiobookData.summary
-        });
+      if (currentBook.copyright && currentBook.copyright !== mainValue) {
+        sources.push({ value: 'copyright', label: 'Copyright', content: formatDate(currentBook.copyright) });
+      }
+      if (currentBook.audiobookData?.copyright && currentBook.audiobookData.copyright !== mainValue) {
+        sources.push({ value: 'audiobook_copyright', label: 'Audiobook Copyright', content: formatDate(currentBook.audiobookData.copyright) });
       }
     }
 
+    // Add sources from different editions
     if (editions && editions.length > 0) {
       editions.forEach((edition, index) => {
-        let editionValue: string | null = null;
+        let editionValue: any = null;
         switch (fieldId) {
-          case 'title': editionValue = edition.title || null; break;
-          case 'publisher': editionValue = edition.publisher || null; break;
-          case 'releaseDate': editionValue = edition.publishedDate || null; break;
-          case 'pageCount': editionValue = edition.pageCount?.toString() || null; break;
-          case 'description': editionValue = edition.description || null; break;
-          case 'thumbnail': editionValue = edition.thumbnail || null; break;
+          case 'title': editionValue = edition.title; break;
+          case 'publisher': editionValue = edition.publisher; break;
+          case 'pageCount': editionValue = edition.pageCount; break;
+          case 'description': editionValue = edition.description; break;
+          case 'thumbnail': editionValue = edition.thumbnail; break;
+          case 'releaseDate': editionValue = edition.publishedDate; break;
         }
-        
-        if (editionValue && editionValue !== mainValue) {
+
+        // Add if the edition has a value and it's not already in sources
+        if (editionValue && !sources.some(s => s.content === editionValue)) {
           sources.push({
             value: index,
-            label: `Edition ${index + 1} (${edition.publishedDate || 'Unknown year'})`,
-            content: editionValue
+            label: `Edition ${index + 1}`,
+            content: fieldId === 'releaseDate' ? formatDate(editionValue) : editionValue,
           });
         }
       });
     }
 
-    return sources;
-  };
-
-  // Get final book data with user's field selections applied
-  const getFinalBookData = () => {
-    if (!selectedFieldData) {
-      return currentBook;
-    }
-
-    // Create the final book data with proper field mapping
-    const finalData = {
-      ...currentBook,
-      description: selectedFieldData.description || currentBook.description,
-      publisher: selectedFieldData.publisher || currentBook.publisher,
-      pageCount: selectedFieldData.pageCount || currentBook.pageCount,
-      publishedDate: selectedFieldData.releaseDate || currentBook.publishedDate,
-      thumbnail: selectedFieldData.thumbnail || currentBook.thumbnail,
-      audiobookData: currentBook.audiobookData,
-    };
-
-    // Log the field selections being applied for debugging
-    if (fieldSelections) {
-      console.log('Applying field selections to final book data:', {
-        selections: fieldSelections,
-        selectedData: selectedFieldData,
-        finalData: {
-          description: finalData.description,
-          publisher: finalData.publisher,
-          pageCount: finalData.pageCount,
-          publishedDate: finalData.publishedDate,
-          thumbnail: finalData.thumbnail
+    // Add sources from audiobook data
+    if (currentBook.audiobookData) {
+      if (fieldId === 'thumbnail' && currentBook.audiobookData.image && !sources.some(s => s.value === 'audiobook')) {
+        sources.push({ value: 'audiobook', label: 'Audiobook Cover', content: currentBook.audiobookData.image });
+      }
+      if (fieldId === 'description') {
+        if (currentBook.audiobookData.description && !sources.some(s => s.value === 'audiobook')) {
+          sources.push({ value: 'audiobook', label: 'About this listen', content: currentBook.audiobookData.description });
         }
-      });
+        if (currentBook.audiobookData.summary && !sources.some(s => s.value === 'audiobook_summary')) {
+          sources.push({ value: 'audiobook_summary', label: 'Audiobook Summary', content: currentBook.audiobookData.summary });
+        }
+      }
+       if (fieldId === 'publisher' && currentBook.audiobookData.publisher && !sources.some(s => s.value === 'audiobook')) {
+        sources.push({ value: 'audiobook', label: 'Audiobook', content: currentBook.audiobookData.publisher });
+      }
     }
-
-    return finalData;
+    
+    // Remove duplicates based on content, prioritizing 'original' and then others
+    const uniqueSources = Array.from(new Map(sources.map(s => [s.content, s])).values());
+    
+    return uniqueSources;
   };
 
   return {
@@ -522,12 +534,10 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
     loadingEditions,
     loadingAudiobook,
     fieldSelections,
-    selectedFieldData,
-    setFieldSelections,
-    setSelectedFieldData,
+    getFinalBookData,
     fetchAllEditionsCategories,
     fetchAudiobookData,
-    getFinalBookData,
-    getFieldSources
+    getFieldSources,
+    updateFieldSelection,
   };
 }; 

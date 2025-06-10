@@ -1,6 +1,9 @@
 import React from 'react';
 import { BookSearchResult } from '../../types/book';
 import BookDataRow from './BookDataRow';
+import { MagnifyingGlassIcon, SpinnerGapIcon } from '@phosphor-icons/react';
+import { ICON_CONTEXTS, ICON_WEIGHTS } from '../../constants/iconConfig';
+import Tooltip from '../ui/Tooltip';
 
 // Define the BookDataField interface
 interface BookDataField {
@@ -24,6 +27,7 @@ interface BookDataTableProps {
   openAudiobookSearch?: () => void;
   loadingAudiobook?: boolean;
   onOpenCategoriesModal?: () => void;
+  getFieldSources: (fieldId: string) => any[];
 }
 
 // Configuration for all book data fields
@@ -68,6 +72,7 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
   openAudiobookSearch,
   loadingAudiobook,
   onOpenCategoriesModal,
+  getFieldSources,
 }) => {
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return ''; // Return empty string for falsy dates
@@ -259,221 +264,32 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
     return value && value !== '' && value !== 'None' && value !== 'None selected' && value !== 'Empty (default)';
   };
 
-  // Helper function to get available sources for a field
-  const getFieldSources = (fieldId: string) => {
-    const sources = [];
-    
-    // Always add main book source if it has data
-    const getMainValue = (fieldId: string) => {
-      switch (fieldId) {
-        case 'title': return book.title || '';
-        case 'authors': return book.authors?.join(', ') || '';
-        case 'description': return book.description || '';
-        case 'categories': return selectedCategories.length > 0 ? `${selectedCategories.length} selected` : 'None selected';
-        case 'rating': return book.averageRating ? `${book.averageRating}/5` : '';
-        case 'thumbnail': return book.thumbnail || '';
-        case 'publisher': return book.publisher || '';
-        case 'releaseDate': return formatDate(book.publishedDate) || formatDate(book.originalPublishedDate) || '';
-        case 'pageCount': return book.pageCount?.toString() || '';
-        case 'isbn13': return book.isbn13 || '';
-        case 'isbn10': return book.isbn10 || '';
-        case 'audiobookPublisher': return book.audiobookData?.publisher || '';
-        case 'audiobookNarrators': 
-          if (book.audiobookData?.narrators) {
-            if (Array.isArray(book.audiobookData.narrators)) {
-              return book.audiobookData.narrators.join(', ');
-            }
-            return String(book.audiobookData.narrators);
-          }
-          return '';
-        case 'audiobookDuration': 
-          if (book.audiobookData?.totalDurationHours) {
-            return book.audiobookData.totalDurationHours < 1 
-              ? `${Math.round(book.audiobookData.totalDurationHours * 60)} min`
-              : `${book.audiobookData.totalDurationHours.toFixed(1)} hrs`;
-          }
-          return book.audiobookData?.duration || '';
-        case 'audiobookChapters': return book.audiobookData?.chapters?.toString() || book.audiobookData?.chapterCount?.toString() || '';
-        case 'audiobookRating': 
-          if (book.audiobookData?.rating) {
-            return book.audiobookData.ratingCount 
-              ? `${book.audiobookData.rating}/5 (${book.audiobookData.ratingCount} reviews)`
-              : `${book.audiobookData.rating}/5`;
-          }
-          return '';
-        case 'audiobookASIN': return book.audiobookData?.asin || '';
-        case 'audiobookURL': return book.audiobookData?.audibleUrl || '';
-        default: return '';
-      }
-    };
-
-    // Special handling for releaseDate field to include all date sources
-    if (fieldId === 'releaseDate') {
-      // 1. Add edition published date if available
-      if (book.publishedDate) {
-        sources.push({
-          value: 'original',
-          label: 'This Edition',
-          content: formatDate(book.publishedDate)
-        });
-      }
-
-      // 2. Add original published date if available and different
-      if (book.originalPublishedDate && book.originalPublishedDate !== book.publishedDate) {
-        sources.push({
-          value: 'first_published',
-          label: 'First Published',
-          content: formatDate(book.originalPublishedDate)
-        });
-      }
-
-      // 3. Add audiobook published date if available and different
-      if (book.audiobookData?.publishedDate && 
-          book.audiobookData.publishedDate !== book.publishedDate && 
-          book.audiobookData.publishedDate !== book.originalPublishedDate) {
-        sources.push({
-          value: 'audiobook',
-          label: 'Audiobook',
-          content: formatDate(book.audiobookData.publishedDate)
-        });
-      }
-
-      // 4. Add copyright dates if available
-      if (book.copyright && 
-          book.copyright !== book.publishedDate && 
-          book.copyright !== book.originalPublishedDate &&
-          book.copyright !== book.audiobookData?.publishedDate) {
-        sources.push({
-          value: 'copyright',
-          label: 'Copyright',
-          content: formatDate(book.copyright)
-        });
-      }
-
-      if (book.audiobookData?.copyright &&
-          book.audiobookData.copyright !== book.copyright &&
-          book.audiobookData.copyright !== book.publishedDate && 
-          book.audiobookData.copyright !== book.originalPublishedDate &&
-          book.audiobookData.copyright !== book.audiobookData?.publishedDate) {
-        sources.push({
-          value: 'audiobook_copyright',
-          label: 'Audiobook Copyright',
-          content: formatDate(book.audiobookData.copyright)
-        });
-      }
-
-      // 5. Add edition dates from other editions if available
-      if (editions && editions.length > 0) {
-        editions.forEach((edition, index) => {
-          if (edition.publishedDate && 
-              edition.publishedDate !== book.publishedDate && 
-              edition.publishedDate !== book.originalPublishedDate &&
-              edition.publishedDate !== book.audiobookData?.publishedDate) {
-            sources.push({
-              value: index,
-              label: `Edition ${index + 1} (${formatDate(edition.publishedDate)})`,
-              content: formatDate(edition.publishedDate)
-            });
-          }
-        });
-      }
-
-      return sources;
-    }
-
-    const mainValue = getMainValue(fieldId);
-    if (mainValue) {
-      sources.push({
-        value: 'original', // Use 'original' to match BookInfoPanel
-        label: 'Original Book',
-        content: mainValue
-      });
-    }
-
-    // Add edition sources if available
-    if (editions && editions.length > 0) {
-      editions.forEach((edition, index) => {
-        let editionValue = '';
-        switch (fieldId) {
-          case 'title': editionValue = edition.title; break;
-          case 'publisher': editionValue = edition.publisher; break;
-          case 'pageCount': editionValue = edition.pageCount?.toString(); break;
-          case 'description': editionValue = edition.description; break;
-          case 'thumbnail': editionValue = edition.thumbnail; break;
-          // Add more edition fields as needed
-        }
-        
-        if (editionValue && editionValue !== mainValue) {
-          sources.push({
-            value: index, // Use index number to match BookInfoPanel
-            label: `Edition ${index + 1}`,
-            content: editionValue
-          });
-        }
-      });
-    }
-
-    // Add audiobook sources if available
-    if (book.audiobookData) {
-      if (fieldId === 'thumbnail' && book.audiobookData.image && book.audiobookData.image !== mainValue) {
-        sources.push({
-          value: 'audiobook',
-          label: 'Audiobook Cover',
-          content: book.audiobookData.image
-        });
-      }
-      if (fieldId === 'description' && book.audiobookData.description && book.audiobookData.description !== mainValue) {
-        sources.push({
-          value: 'audiobook',
-          label: 'Audiobook Description',
-          content: book.audiobookData.description
-        });
-      }
-      // Add audiobook summary as separate source for description
-      if (fieldId === 'description' && book.audiobookData.summary && book.audiobookData.summary !== mainValue && book.audiobookData.summary !== book.audiobookData.description) {
-        sources.push({
-          value: 'audiobook_summary',
-          label: 'Audiobook Summary',
-          content: book.audiobookData.summary
-        });
-      }
-    }
-
-    return sources;
-  };
-
-  // Filter fields to only show those with data or that are mapped
-  const visibleFields = bookDataFields.filter(field => {
-    const hasData = hasFieldData(field.id);
-    const isMapped = tempFieldMappings?.[field.id] || notionSettings?.fieldMapping?.[field.id];
+  // Helper function to determine if a field is visible
+  const isFieldVisible = (fieldId: string) => {
+    const hasData = hasFieldData(fieldId);
+    const isMapped = tempFieldMappings?.[fieldId] || notionSettings?.fieldMapping?.[fieldId];
     return hasData || isMapped;
-  });
-
-  // Group fields by category
-  const groupedFields = visibleFields.reduce((groups, field) => {
-    const category = field.category || 'basic';
-    if (!groups[category]) {
-      groups[category] = [];
-    }
-    groups[category].push(field);
-    return groups;
-  }, {} as Record<string, BookDataField[]>);
-
-  const categoryLabels = {
-    basic: 'Basic Information',
-    publishing: 'Publishing Details',
-    audiobook: 'Audiobook Information',
   };
 
   const renderRow = (field: BookDataField) => {
-    if (!hasFieldData(field.id)) return null;
+    if (!isFieldVisible(field.id)) return null;
+
+    const value = getFieldValue(field.id);
+    const sources = getFieldSources(field.id);
+
+    // Special handling for the audiobook section header
+    if (field.id === 'audiobookPublisher' && sources.length <= 1 && (value === '' || value === 'N/A')) {
+      // If there's no audiobook data, don't render the first field (which acts as a header trigger)
+      return null;
+    }
+    
     return (
       <BookDataRow
         key={field.id}
         field={field}
         book={book}
-        value={getFieldValue(field.id)}
-        sources={getFieldSources(field.id)}
+        value={value}
+        sources={sources}
         notionSettings={notionSettings}
         tempFieldMappings={tempFieldMappings}
         databaseProperties={databaseProperties}
@@ -489,71 +305,103 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
 
   const renderSection = (title: string, category: string) => {
     const fieldsInCategory = bookDataFields.filter(field => field.category === category);
-    const renderedRows = fieldsInCategory.map(renderRow).filter(Boolean);
-
-    if (renderedRows.length === 0) {
-      if (category !== 'audiobook') {
+    
+    // Check if the section should be rendered at all
+    // For audiobooks, only render if there is some data or an option to search
+    if (category === 'audiobook') {
+      const hasAnyAudiobookData = fieldsInCategory.some(field => hasFieldData(field.id));
+      if (!hasAnyAudiobookData && !openAudiobookSearch) {
         return null;
       }
     }
     
-    // Always render audiobook section header if there's audiobook data, even if no fields have values yet
-    if (category === 'audiobook' && !book.audiobookData?.hasAudiobook) {
-      return null;
+    const visibleFields = fieldsInCategory.filter(field => isFieldVisible(field.id));
+    if (visibleFields.length === 0) {
+      // Special case for audiobook section to show the 'Find Audiobook' button
+      if (category === 'audiobook' && openAudiobookSearch) {
+        // Render a placeholder or the button directly if no fields are visible but search is possible
+      } else {
+        return null;
+      }
     }
-    
-    return (
-      <div key={category} className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-lg font-semibold text-gray-800">{title}</h4>
-          {category === 'audiobook' && openAudiobookSearch && (
+
+    // Special introductory row for audiobook section if no data is loaded yet
+    if (category === 'audiobook' && !audiobookData && openAudiobookSearch) {
+      return (
+        <div className="pt-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">{title}</h3>
+          <div className="bg-gray-50 p-4 rounded-lg flex items-center justify-between">
+            <p className="text-sm text-gray-700">
+              No audiobook data loaded. You can search for an audiobook to link it.
+            </p>
             <button
               onClick={openAudiobookSearch}
-              className="p-2 text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200 hover:text-gray-700 transition-colors"
               disabled={loadingAudiobook}
-              title={loadingAudiobook ? 'Searching...' : 'Find Audiobook'}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
             >
-              {loadingAudiobook ? (
-                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" />
-                </svg>
-              )}
+              {loadingAudiobook ? 'Loading...' : 'Find Audiobook'}
             </button>
-          )}
+          </div>
         </div>
-        <div className="space-y-1 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-          {renderedRows.length > 0 ? (
-             renderedRows
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>No book data available</p>
-              <p className="text-sm mt-1">Try adding field mappings in Settings to see more data</p>
-            </div>
+      );
+    }
+
+    return (
+      <div className="pt-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          {title}
+          {category === 'audiobook' && openAudiobookSearch && (
+            <Tooltip content={audiobookData ? 'Re-select audiobook' : 'Search for audiobook'}>
+              <button
+                onClick={openAudiobookSearch}
+                disabled={loadingAudiobook}
+                aria-label={audiobookData ? 'Re-select audiobook' : 'Search for audiobook'}
+                className="group p-2 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:bg-purple-50 disabled:text-purple-300 transition-colors"
+              >
+                {loadingAudiobook ? (
+                  <SpinnerGapIcon
+                    size={ICON_CONTEXTS.UI.BUTTON}
+                    weight={ICON_WEIGHTS.REGULAR}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <MagnifyingGlassIcon
+                    size={ICON_CONTEXTS.UI.BUTTON}
+                    weight={ICON_WEIGHTS.FILL}
+                    className="group-hover:animate-wiggle"
+                  />
+                )}
+              </button>
+            </Tooltip>
           )}
+        </h3>
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          {visibleFields.map((field, index) => (
+            <div 
+              key={field.id} 
+              className={`
+                ${index !== 0 ? 'border-t border-gray-200' : ''}
+              `}
+            >
+              {renderRow(field)}
+            </div>
+          ))}
         </div>
       </div>
     );
   };
 
   return (
-    <div className="space-y-6">
-      {/* Table Header */}
-      <div className="sticky top-0 z-10 grid grid-cols-4 gap-4 p-3 bg-gray-100 rounded-lg text-sm font-medium text-gray-700">
+    <div>
+      <div className="sticky top-0 z-10 grid grid-cols-4 gap-4 p-3 mb-2 bg-gray-100 rounded-lg text-sm font-medium text-gray-700">
         <div>Field</div>
         <div>Value</div>
         <div>Source</div>
         <div>Notion Property</div>
       </div>
-
-      {/* Grouped Field Rows */}
-      {Object.entries(groupedFields).map(([category, fields]) => (
-        renderSection(categoryLabels[category as keyof typeof categoryLabels], category)
-      ))}
+      {renderSection('Basic Information', 'basic')}
+      {renderSection('Publishing Information', 'publishing')}
+      {renderSection('Audiobook Information', 'audiobook')}
     </div>
   );
 };

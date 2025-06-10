@@ -257,6 +257,29 @@ class AudiobookService {
     }
     score += bestAuthorScore;
     
+    // Bonus/Penalty based on numeric volume indicators --------------------------------
+    // If the search query (target title) does NOT include a number but the product title DOES,
+    // we slightly penalize it so that "Heretical Fishing" outranks "Heretical Fishing 2" etc.
+    // Conversely, if the search query DOES include a number and that number is present in the
+    // product title, we give a small bonus. If the numbers mismatch, add a small penalty.
+
+    const targetNumberMatch = normalizedTargetTitle.match(/\d+/);
+    const productNumberMatch = normalizedProductTitle.match(/\d+/);
+
+    if (!targetNumberMatch && productNumberMatch) {
+      score -= 10; // penalize numbered sequels when user didn't specify a number
+    } else if (targetNumberMatch) {
+      if (productNumberMatch) {
+        if (productNumberMatch[0] === targetNumberMatch[0]) {
+          score += 10; // exact matching number bonus
+        } else {
+          score -= 5;  // mismatching number penalty
+        }
+      } else {
+        score -= 5; // user specified number but product lacks it
+      }
+    }
+
     // Bonus for being an audiobook (if we can detect it)
     if (product.format_type === 'audiobook' || product.content_type === 'Product') {
       score += 5;
@@ -1165,6 +1188,24 @@ class AudiobookService {
       score += (commonAuthorWords.length / authorWords.length) * 20;
     }
     
+    // Numeric volume indicator adjustment ------------------------------------------------
+    const targetNumberMatch = normalizedTargetTitle.match(/\d+/);
+    const bookNumberMatch = normalizedBookTitle.match(/\d+/);
+
+    if (!targetNumberMatch && bookNumberMatch) {
+      score -= 10;
+    } else if (targetNumberMatch) {
+      if (bookNumberMatch) {
+        if (bookNumberMatch[0] === targetNumberMatch[0]) {
+          score += 10;
+        } else {
+          score -= 5;
+        }
+      } else {
+        score -= 5;
+      }
+    }
+
     return Math.round(score);
   }
 

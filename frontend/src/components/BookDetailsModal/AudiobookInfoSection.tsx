@@ -6,9 +6,11 @@ import {
   InfoIcon,
   CheckIcon,
   UserIcon,
-  SpinnerGap
+  SpinnerGapIcon,
+  MagnifyingGlassIcon
 } from '@phosphor-icons/react';
 import { ICON_CONTEXTS, ICON_WEIGHTS } from '../../constants/iconConfig';
+import Tooltip from '../ui/Tooltip';
 
 interface AudiobookInfoSectionProps {
   book: BookSearchResult;
@@ -35,28 +37,43 @@ const AudiobookInfoSection: React.FC<AudiobookInfoSectionProps> = ({
         />
         Audiobook
         {loadingAudiobook && (
-          <SpinnerGap 
+          <SpinnerGapIcon 
             size={ICON_CONTEXTS.UI.INPUT} 
             weight={ICON_WEIGHTS.LIGHT} 
             className="animate-spin text-purple-600" 
           />
         )}
-        {/* Search Button */}
-        {!loadingAudiobook && book.authors && book.authors.length > 0 && (
-          <button
-            onClick={onOpenAudiobookSearch}
-            className="ml-auto px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-            title="Search for audiobook on Audnexus"
-          >
-            Search Audnexus
-          </button>
+        {/* Search Icon Button */}
+        {book.authors && book.authors.length > 0 && (
+          <Tooltip content={loadingAudiobook ? 'Searching...' : 'Search for audiobook'}>
+            <button
+              onClick={onOpenAudiobookSearch}
+              disabled={loadingAudiobook}
+              aria-label="Search for audiobook"
+              className="group ml-auto p-2 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:bg-purple-50 disabled:text-purple-300 transition-colors"
+            >
+              {loadingAudiobook ? (
+                <SpinnerGapIcon 
+                  size={ICON_CONTEXTS.UI.BUTTON} 
+                  weight={ICON_WEIGHTS.REGULAR} 
+                  className="animate-spin" 
+                />
+              ) : (
+                <MagnifyingGlassIcon 
+                  size={ICON_CONTEXTS.UI.BUTTON} 
+                  weight={ICON_WEIGHTS.FILL} 
+                  className="group-hover:animate-wiggle" 
+                />
+              )}
+            </button>
+          </Tooltip>
         )}
       </h4>
       
       {loadingAudiobook ? (
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
           <div className="flex items-center gap-2 text-purple-700">
-            <SpinnerGap 
+            <SpinnerGapIcon 
               size={ICON_CONTEXTS.UI.INPUT} 
               weight={ICON_WEIGHTS.LIGHT} 
               className="animate-spin text-purple-600" 

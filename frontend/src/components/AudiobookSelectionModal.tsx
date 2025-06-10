@@ -107,7 +107,6 @@ const AudiobookSelectionModal: React.FC<AudiobookSelectionModalProps> = ({
       if (result.success && result.data) {
         console.log(`✅ Selected audiobook: "${result.data.title}"`);
         onAudiobookSelected(result.data);
-        toast.success(`Selected audiobook: "${result.data.title}"`);
         onClose();
       } else {
         setError(result.error || 'Failed to get audiobook details');
