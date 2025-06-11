@@ -59,7 +59,9 @@ const Settings: React.FC = () => {
     categoryMappings: {},
     fieldDefaults: {},
     overriddenDefaultMappings: [],
-    autoFilterLocations: false
+    autoFilterLocations: false,
+    splitCommas: true,
+    splitAmpersand: true
   });
   const [initialCategorySettings, setInitialCategorySettings] = useState<CategorySettings | null>(null);
   const [showDefaultMappings, setShowDefaultMappings] = useState(false);
@@ -92,7 +94,10 @@ const Settings: React.FC = () => {
     if (useEnglishOnlySources !== (notionSettings.useEnglishOnlySources ?? false)) return true;
     
     // Check for changes in category settings
-    if (initialCategorySettings && categorySettings.autoFilterLocations !== initialCategorySettings.autoFilterLocations) {
+    if (initialCategorySettings && (
+        categorySettings.autoFilterLocations !== initialCategorySettings.autoFilterLocations ||
+        categorySettings.splitCommas !== initialCategorySettings.splitCommas ||
+        categorySettings.splitAmpersand !== initialCategorySettings.splitAmpersand)) {
       return true;
     }
     
@@ -494,9 +499,22 @@ const Settings: React.FC = () => {
       autoFilterLocations: !categorySettings.autoFilterLocations
     };
     setCategorySettings(updatedSettings);
-    
-    // const status = updatedSettings.autoFilterLocations ? 'enabled' : 'disabled';
-    // toast.success(`Auto-filtering of location genres ${status} (unsaved)`);
+    CategoryService.saveSettings(updatedSettings);
+    toast.success(`Auto-filter locations ${updatedSettings.autoFilterLocations ? 'enabled' : 'disabled'}`);
+  };
+
+  const handleToggleSplitCommas = () => {
+    const updated = { ...categorySettings, splitCommas: !categorySettings.splitCommas };
+    setCategorySettings(updated);
+    CategoryService.saveSettings(updated);
+    toast.success(`Split on commas ${updated.splitCommas ? 'enabled' : 'disabled'}`);
+  };
+
+  const handleToggleSplitAmpersand = () => {
+    const updated = { ...categorySettings, splitAmpersand: !categorySettings.splitAmpersand };
+    setCategorySettings(updated);
+    CategoryService.saveSettings(updated);
+    toast.success(`Split on "&" / "and" ${updated.splitAmpersand ? 'enabled' : 'disabled'}`);
   };
 
   const renderGoogleBooksStatus = () => {
@@ -1023,6 +1041,39 @@ const Settings: React.FC = () => {
                 Genre mappings allow you to standardize book genres across different sources. 
                 When a genre matches a mapped entry, it will be converted to the preferred name.
               </p>
+            </div>
+
+            {/* Auto-filter Locations */}
+            {/* Split by Commas */}
+            <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-gray-900">Split Genres on Commas</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    When importing genres like "Mystery, Thriller", split them into separate genres.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={categorySettings.splitCommas} onChange={handleToggleSplitCommas} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+            </div>
+
+            {/* Split by Ampersand / "and" */}
+            <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-gray-900">Split Genres on "&" / "and"</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Split compound genres connected with "&" or "and", e.g., "Science Fiction & Fantasy".
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={categorySettings.splitAmpersand} onChange={handleToggleSplitAmpersand} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
             </div>
 
             {/* Auto-filter Locations */}

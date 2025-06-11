@@ -4,6 +4,8 @@ export interface CategorySettings {
   fieldDefaults: { [fieldName: string]: 'audiobook' | 'original' | number }; // Default sources for each field
   overriddenDefaultMappings?: string[]; // Categories where default mapping should be ignored
   autoFilterLocations?: boolean; // Automatically filter out location genres
+  splitCommas?: boolean; // Split genres by commas
+  splitAmpersand?: boolean; // Split genres by '&' or ' and '
 }
 
 export class CategoryService {
@@ -88,7 +90,9 @@ export class CategoryService {
           categoryMappings: mappings,
           fieldDefaults: parsed.fieldDefaults || {},
           overriddenDefaultMappings: parsed.overriddenDefaultMappings || [],
-          autoFilterLocations: parsed.autoFilterLocations || false
+          autoFilterLocations: parsed.autoFilterLocations ?? false,
+          splitCommas: parsed.splitCommas ?? true,
+          splitAmpersand: parsed.splitAmpersand ?? true
         };
       }
     } catch (error) {
@@ -100,7 +104,9 @@ export class CategoryService {
       categoryMappings: { ...this.DEFAULT_MAPPINGS },
       fieldDefaults: {},
       overriddenDefaultMappings: [],
-      autoFilterLocations: false
+      autoFilterLocations: false,
+      splitCommas: true,
+      splitAmpersand: true
     };
   }
 
@@ -135,10 +141,17 @@ export class CategoryService {
         overriddenDefaults: overriddenDefaults,
         fieldDefaults: settings.fieldDefaults,
         overriddenDefaultMappings: settings.overriddenDefaultMappings || [],
-        autoFilterLocations: settings.autoFilterLocations || false
+        autoFilterLocations: settings.autoFilterLocations || false,
+        splitCommas: settings.splitCommas ?? true,
+        splitAmpersand: settings.splitAmpersand ?? true
       };
       
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave));
+      
+      // Dispatch a custom event to notify other components of the change
+      window.dispatchEvent(new CustomEvent('categorySettingsChanged', { 
+        detail: settings 
+      }));
     } catch (error) {
       console.error('Failed to save category settings:', error);
     }
@@ -147,7 +160,7 @@ export class CategoryService {
   /**
    * Split comma-separated categories and clean them up
    */
-  static splitCategories(categories: string[]): string[] {
+  static splitCategories(categories: string[], options: { splitCommas: boolean; splitAmpersand: boolean }): string[] {
     const split: string[] = [];
     
     // Well-known compound genres that should not be split
@@ -163,44 +176,58 @@ export class CategoryService {
     categories.forEach(category => {
       const lowerCategory = category.toLowerCase();
       
-      if (category.includes(',')) {
-        // Split by comma and clean each part
-        const parts = category.split(',').map(part => part.trim()).filter(part => part.length > 0);
-        split.push(...parts);
-      } else {
-        // Check if this is a preserved compound genre
-        const isPreservedCompound = preservedCompoundGenres.some(preserved => 
-          lowerCategory === preserved || lowerCategory.includes(preserved)
-        );
+      // Check if this is a preserved compound genre
+      const isPreservedCompound = preservedCompoundGenres.some(preserved => 
+        lowerCategory === preserved || lowerCategory.includes(preserved)
+      );
+      
+      if (isPreservedCompound) {
+        // Don't split compound genres, just clean them up
+        split.push(category.trim());
+        return;
+      }
+      
+      // Start with the original category, then apply splitting rules in order
+      let parts = [category];
+      
+      // First, split by comma if enabled
+      if (options.splitCommas && category.includes(',')) {
+        parts = category.split(',').map(part => part.trim()).filter(part => part.length > 0);
+      }
+      
+      // Then, split each part by ampersand and " and " if enabled
+      if (options.splitAmpersand) {
+        const finalParts: string[] = [];
         
-        if (isPreservedCompound) {
-          // Don't split compound genres, just clean them up
-          split.push(category.trim());
-        } else {
-          // Apply standard splitting logic for "&" and " and "
-          let parts = [category];
+        parts.forEach(part => {
+          let subParts = [part];
           
           // Split by ampersand
-          if (category.includes('&')) {
-            parts = category.split('&');
+          if (part.includes('&')) {
+            subParts = part.split('&').map(p => p.trim()).filter(p => p.length > 0);
           }
           
-          // Then split each part by " and " (with spaces to avoid splitting words like "brand")
-          const finalParts: string[] = [];
-          parts.forEach(part => {
-            if (part.toLowerCase().includes(' and ')) {
-              const andParts = part.split(/ and /i) // Case insensitive split
+          // Then split each subpart by " and " (with spaces to avoid splitting words like "brand")
+          const andSplitParts: string[] = [];
+          subParts.forEach(subPart => {
+            if (subPart.toLowerCase().includes(' and ')) {
+              const andParts = subPart.split(/ and /i) // Case insensitive split
                 .map(p => p.trim())
                 .filter(p => p.length > 0);
-              finalParts.push(...andParts);
+              andSplitParts.push(...andParts);
             } else {
-              finalParts.push(part.trim());
+              andSplitParts.push(subPart.trim());
             }
           });
           
-          split.push(...finalParts.filter(part => part.length > 0));
-        }
+          finalParts.push(...andSplitParts);
+        });
+        
+        parts = finalParts;
       }
+      
+      // Add all processed parts
+      split.push(...parts.filter(part => part.length > 0));
     });
     
     return split.filter(cat => cat.length > 0);
@@ -209,7 +236,7 @@ export class CategoryService {
   /**
    * Split comma-separated categories and clean them up, while preserving audiobook genres
    */
-  static splitCategoriesWithAudiobookPreservation(categories: string[], audiobookGenres: string[] = []): string[] {
+  static splitCategoriesWithAudiobookPreservation(categories: string[], audiobookGenres: string[] = [], options: { splitCommas: boolean; splitAmpersand: boolean }): string[] {
     const split: string[] = [];
     
     // Well-known compound genres that should not be split
@@ -243,18 +270,20 @@ export class CategoryService {
       // This ensures consistency regardless of when genres are loaded
       if (audiobookGenresLower.includes(lowerCategory)) {
         // Even for audiobook genres, apply splitting if it contains & or and
-        if (category.includes('&') || category.toLowerCase().includes(' and ')) {
+        if (options.splitAmpersand && (category.includes('&') || category.toLowerCase().includes(' and '))) {
           let parts = [category];
           
-          // Split by ampersand
-          if (category.includes('&')) {
-            parts = category.split('&');
+          if (options.splitAmpersand) {
+            // Split by ampersand
+            if (category.includes('&')) {
+              parts = category.split('&');
+            }
           }
           
           // Then split each part by " and " (with spaces to avoid splitting words like "brand")
           const finalParts: string[] = [];
           parts.forEach(part => {
-            if (part.toLowerCase().includes(' and ')) {
+            if (options.splitAmpersand && part.toLowerCase().includes(' and ')) {
               const andParts = part.split(/ and /i) // Case insensitive split
                 .map(p => p.trim())
                 .filter(p => p.length > 0);
@@ -272,34 +301,47 @@ export class CategoryService {
         return;
       }
       
-      if (category.includes(',')) {
-        // Split by comma and clean each part
-        const parts = category.split(',').map(part => part.trim()).filter(part => part.length > 0);
-        split.push(...parts);
-      } else {
-        // Apply standard splitting logic for "&" and " and "
-        let parts = [category];
-        
-        // Split by ampersand
-        if (category.includes('&')) {
-          parts = category.split('&');
-        }
-        
-        // Then split each part by " and " (with spaces to avoid splitting words like "brand")
+      // Start with the original category, then apply splitting rules in order
+      let parts = [category];
+      
+      // First, split by comma if enabled
+      if (options.splitCommas && category.includes(',')) {
+        parts = category.split(',').map(part => part.trim()).filter(part => part.length > 0);
+      }
+      
+      // Then, split each part by ampersand and " and " if enabled
+      if (options.splitAmpersand) {
         const finalParts: string[] = [];
+        
         parts.forEach(part => {
-          if (part.toLowerCase().includes(' and ')) {
-            const andParts = part.split(/ and /i) // Case insensitive split
-              .map(p => p.trim())
-              .filter(p => p.length > 0);
-            finalParts.push(...andParts);
-          } else {
-            finalParts.push(part.trim());
+          let subParts = [part];
+          
+          // Split by ampersand
+          if (part.includes('&')) {
+            subParts = part.split('&').map(p => p.trim()).filter(p => p.length > 0);
           }
+          
+          // Then split each subpart by " and " (with spaces to avoid splitting words like "brand")
+          const andSplitParts: string[] = [];
+          subParts.forEach(subPart => {
+            if (subPart.toLowerCase().includes(' and ')) {
+              const andParts = subPart.split(/ and /i) // Case insensitive split
+                .map(p => p.trim())
+                .filter(p => p.length > 0);
+              andSplitParts.push(...andParts);
+            } else {
+              andSplitParts.push(subPart.trim());
+            }
+          });
+          
+          finalParts.push(...andSplitParts);
         });
         
-        split.push(...finalParts.filter(part => part.length > 0));
+        parts = finalParts;
       }
+      
+      // Add all processed parts
+      split.push(...parts.filter(part => part.length > 0));
     });
     
     return split.filter(cat => cat.length > 0);
@@ -329,10 +371,10 @@ export class CategoryService {
         console.log(`Processing categories with audiobook genre splitting (${cleanAudiobookGenres.length} genres)`);
       }
       // Use the audiobook-aware splitting method, but ensure compound genres still get split
-      splitCategories = this.splitCategoriesWithAudiobookPreservation(categories, cleanAudiobookGenres);
+      splitCategories = this.splitCategoriesWithAudiobookPreservation(categories, cleanAudiobookGenres, { splitCommas: settings.splitCommas !== false, splitAmpersand: settings.splitAmpersand !== false });
     } else {
       // For all other cases, use the standard splitting method
-      splitCategories = this.splitCategories(categories);
+      splitCategories = this.splitCategories(categories, { splitCommas: settings.splitCommas !== false, splitAmpersand: settings.splitAmpersand !== false });
     }
     
     const processed: string[] = [];

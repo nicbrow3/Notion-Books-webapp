@@ -191,13 +191,23 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       
       console.log(`Final category count: ${filteredCategories.length} (filtered out ${uniqueCategories.length - filteredCategories.length} unwanted categories)`);
 
+      // NEW: Pre-split categories based on current settings to avoid showing unsplit compound genres
+      const currentCategorySettings = CategoryService.loadSettings();
+      const preSplitCategories = CategoryService.splitCategories(
+        filteredCategories,
+        {
+          splitCommas: currentCategorySettings.splitCommas !== false,
+          splitAmpersand: currentCategorySettings.splitAmpersand !== false,
+        }
+      );
+
       // Only update state if categories actually changed to avoid render loops
       const prevCategories = categoryManagement.rawCategories;
       const areArraysEqual = (a: string[], b: string[]) =>
         a.length === b.length && a.every((val, idx) => val === b[idx]);
 
-      if (!areArraysEqual(filteredCategories, prevCategories)) {
-        categoryManagement.setRawCategories(filteredCategories);
+      if (!areArraysEqual(preSplitCategories, prevCategories)) {
+        categoryManagement.setRawCategories(preSplitCategories);
       }
     }
   }, [

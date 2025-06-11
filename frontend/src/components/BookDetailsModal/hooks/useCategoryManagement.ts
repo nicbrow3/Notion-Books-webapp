@@ -52,6 +52,34 @@ export const useCategoryManagement = ({
   const hasProcessedCategoriesRef = useRef<boolean>(false);
   const hasProcessedAudiobookRef = useRef<boolean>(false);
 
+  // Listen for changes to localStorage settings
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'notion-books-category-settings') {
+        const newSettings = CategoryService.loadSettings();
+        setCategorySettings(newSettings);
+        // Force reprocessing when settings change
+        hasProcessedCategoriesRef.current = false;
+        hasProcessedAudiobookRef.current = false;
+      }
+    };
+
+    const handleCategorySettingsChange = (e: CustomEvent) => {
+      const newSettings = e.detail as CategorySettings;
+      setCategorySettings(newSettings);
+      // Force reprocessing when settings change
+      hasProcessedCategoriesRef.current = false;
+      hasProcessedAudiobookRef.current = false;
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('categorySettingsChanged', handleCategorySettingsChange as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('categorySettingsChanged', handleCategorySettingsChange as EventListener);
+    };
+  }, []);
+
   // Process categories whenever raw categories or settings change
   const processCategories = useCallback((preserveSelections = false, overrideSettings?: CategorySettings) => {
     const settingsToUse = overrideSettings || categorySettings;
@@ -148,6 +176,18 @@ export const useCategoryManagement = ({
       hasProcessedCategoriesRef.current = true;
     }
   }, [isOpen, rawCategories, processCategories]);
+
+  // Reprocess categories when settings change
+  useEffect(() => {
+    // Only reprocess categories when modal is actually open
+    if (!isOpen) return;
+    
+    // Force reprocessing when category settings change
+    if (hasProcessedCategoriesRef.current) {
+      console.log('Category settings changed, reprocessing categories');
+      processCategories(preserveSelectionsRef.current);
+    }
+  }, [isOpen, categorySettings, processCategories]);
 
   // Reset category processing flag when book or raw categories change
   useEffect(() => {
