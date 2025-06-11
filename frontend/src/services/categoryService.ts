@@ -821,7 +821,8 @@ export class CategoryService {
    */
   static setFieldDefault(fieldName: string, defaultSource: 'audiobook' | 'original' | number): void {
     const settings = this.loadSettings();
-    settings.fieldDefaults[fieldName] = defaultSource;
+    const key = fieldName.toLowerCase();
+    settings.fieldDefaults[key] = defaultSource;
     this.saveSettings(settings);
   }
 
@@ -830,7 +831,8 @@ export class CategoryService {
    */
   static getFieldDefault(fieldName: string): 'audiobook' | 'original' | number | null {
     const settings = this.loadSettings();
-    return settings.fieldDefaults[fieldName] || null;
+    const key = fieldName.toLowerCase();
+    return (settings.fieldDefaults[key] ?? settings.fieldDefaults[fieldName]) || null;
   }
 
   /**
@@ -838,7 +840,8 @@ export class CategoryService {
    */
   static removeFieldDefault(fieldName: string): void {
     const settings = this.loadSettings();
-    delete settings.fieldDefaults[fieldName];
+    const key = fieldName.toLowerCase();
+    delete settings.fieldDefaults[key];
     this.saveSettings(settings);
   }
 

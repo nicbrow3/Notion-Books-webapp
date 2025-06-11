@@ -49,9 +49,18 @@ const Settings: React.FC = () => {
 
   // Local state for connecting
   const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
-  const [openLibraryStatus, setOpenLibraryStatus] = useState<'checking' | 'connected' | 'error'>('checking');
-  const [audnexusStatus, setAudnexusStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error' | 'idle'>(() => {
+    const cached = sessionStorage.getItem('googleBooksStatus');
+    return cached ? (cached as 'connected' | 'error') : 'idle';
+  });
+  const [openLibraryStatus, setOpenLibraryStatus] = useState<'checking' | 'connected' | 'error' | 'idle'>(() => {
+    const cached = sessionStorage.getItem('openLibraryStatus');
+    return cached ? (cached as 'connected' | 'error') : 'idle';
+  });
+  const [audnexusStatus, setAudnexusStatus] = useState<'checking' | 'connected' | 'error' | 'idle'>(() => {
+    const cached = sessionStorage.getItem('audnexusStatus');
+    return cached ? (cached as 'connected' | 'error') : 'idle';
+  });
 
   // Category settings state
   const [categorySettings, setCategorySettings] = useState<CategorySettings>({
@@ -105,50 +114,60 @@ const Settings: React.FC = () => {
     return false;
   };
 
-  // Test API connections on component mount
+  // Test API connections on first visit to settings page (only if not cached)
   useEffect(() => {
-    const testConnections = async () => {
-      // Test Google Books API
-      try {
-        const result = await BookService.testConnection();
-        if (result.success) {
-          setConnectionStatus('connected');
-          toast.success('Connected to Google Books API');
-        } else {
+    const testConnectionsOnFirstVisit = async () => {
+      // Only test APIs that haven't been tested yet in this session
+      if (!sessionStorage.getItem('googleBooksStatus')) {
+        try {
+          const result = await BookService.testConnection();
+          if (result.success) {
+            setConnectionStatus('connected');
+            sessionStorage.setItem('googleBooksStatus', 'connected');
+          } else {
+            setConnectionStatus('error');
+            sessionStorage.setItem('googleBooksStatus', 'error');
+          }
+        } catch (error) {
           setConnectionStatus('error');
-          toast.error(`API Connection Error: ${result.message}`);
+          sessionStorage.setItem('googleBooksStatus', 'error');
         }
-      } catch (error) {
-        setConnectionStatus('error');
-        toast.error('Failed to connect to Google Books API');
       }
 
-      // Test Open Library API
-      try {
-        const response = await fetch('https://openlibrary.org/search.json?q=test&limit=1');
-        if (response.ok) {
-          setOpenLibraryStatus('connected');
-        } else {
+      if (!sessionStorage.getItem('openLibraryStatus')) {
+        try {
+          const response = await fetch('https://openlibrary.org/search.json?q=test&limit=1');
+          if (response.ok) {
+            setOpenLibraryStatus('connected');
+            sessionStorage.setItem('openLibraryStatus', 'connected');
+          } else {
+            setOpenLibraryStatus('error');
+            sessionStorage.setItem('openLibraryStatus', 'error');
+          }
+        } catch (error) {
           setOpenLibraryStatus('error');
+          sessionStorage.setItem('openLibraryStatus', 'error');
         }
-      } catch (error) {
-        setOpenLibraryStatus('error');
       }
 
-      // Test Audnexus API
-      try {
-        const response = await fetch('https://api.audnex.us/books/B073H9PF2D?region=us');
-        if (response.ok) {
-          setAudnexusStatus('connected');
-        } else {
+      if (!sessionStorage.getItem('audnexusStatus')) {
+        try {
+          const response = await fetch('https://api.audnex.us/books/B073H9PF2D?region=us');
+          if (response.ok) {
+            setAudnexusStatus('connected');
+            sessionStorage.setItem('audnexusStatus', 'connected');
+          } else {
+            setAudnexusStatus('error');
+            sessionStorage.setItem('audnexusStatus', 'error');
+          }
+        } catch (error) {
           setAudnexusStatus('error');
+          sessionStorage.setItem('audnexusStatus', 'error');
         }
-      } catch (error) {
-        setAudnexusStatus('error');
       }
     };
 
-    testConnections();
+    testConnectionsOnFirstVisit();
   }, []);
 
   // Load category settings
@@ -558,6 +577,20 @@ const Settings: React.FC = () => {
             </div>
           </div>
         );
+      case 'idle':
+      default:
+        return (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+            <div className="flex items-center">
+              <WarningIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="text-gray-600 mr-2" 
+              />
+              <span className="text-gray-800">Click the test button to check connection</span>
+            </div>
+          </div>
+        );
     }
   };
 
@@ -602,6 +635,20 @@ const Settings: React.FC = () => {
             </div>
           </div>
         );
+      case 'idle':
+      default:
+        return (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+            <div className="flex items-center">
+              <WarningIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="text-gray-600 mr-2" 
+              />
+              <span className="text-gray-800">Click the test button to check connection</span>
+            </div>
+          </div>
+        );
     }
   };
 
@@ -643,6 +690,20 @@ const Settings: React.FC = () => {
                 className="text-red-600 mr-2" 
               />
               <span className="text-red-800">API connection failed</span>
+            </div>
+          </div>
+        );
+      case 'idle':
+      default:
+        return (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+            <div className="flex items-center">
+              <WarningIcon 
+                size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
+                weight={ICON_WEIGHTS.BOLD} 
+                className="text-gray-600 mr-2" 
+              />
+              <span className="text-gray-800">Click the test button to check connection</span>
             </div>
           </div>
         );
@@ -1363,13 +1424,16 @@ const Settings: React.FC = () => {
                       const result = await BookService.testConnection();
                       if (result.success) {
                         setConnectionStatus('connected');
+                        sessionStorage.setItem('googleBooksStatus', 'connected');
                         toast.success('Google Books API connection is working!');
                       } else {
                         setConnectionStatus('error');
+                        sessionStorage.setItem('googleBooksStatus', 'error');
                         toast.error(`Connection test failed: ${result.message}`);
                       }
                     } catch (error) {
                       setConnectionStatus('error');
+                      sessionStorage.setItem('googleBooksStatus', 'error');
                       toast.error('Failed to test Google Books API connection');
                     }
                   }}
@@ -1413,13 +1477,16 @@ const Settings: React.FC = () => {
                       const response = await fetch('https://openlibrary.org/search.json?q=test&limit=1');
                       if (response.ok) {
                         setOpenLibraryStatus('connected');
+                        sessionStorage.setItem('openLibraryStatus', 'connected');
                         toast.success('Open Library API connection is working!');
                       } else {
                         setOpenLibraryStatus('error');
+                        sessionStorage.setItem('openLibraryStatus', 'error');
                         toast.error('Open Library API connection failed');
                       }
                     } catch (error) {
                       setOpenLibraryStatus('error');
+                      sessionStorage.setItem('openLibraryStatus', 'error');
                       toast.error('Failed to test Open Library API connection');
                     }
                   }}
@@ -1466,13 +1533,16 @@ const Settings: React.FC = () => {
                       const response = await fetch('https://api.audnex.us/books/B073H9PF2D?region=us');
                       if (response.ok) {
                         setAudnexusStatus('connected');
+                        sessionStorage.setItem('audnexusStatus', 'connected');
                         toast.success('Audnexus API connection is working!');
                       } else {
                         setAudnexusStatus('error');
+                        sessionStorage.setItem('audnexusStatus', 'error');
                         toast.error('Audnexus API connection failed');
                       }
                     } catch (error) {
                       setAudnexusStatus('error');
+                      sessionStorage.setItem('audnexusStatus', 'error');
                       toast.error('Failed to test Audnexus API connection');
                     }
                   }}

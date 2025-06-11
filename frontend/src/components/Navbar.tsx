@@ -1,26 +1,49 @@
-import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { toast } from 'react-hot-toast';
+import React, { useRef, useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 const Navbar: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { isAuthenticated, user, logout } = useAuth();
+  const [indicatorStyle, setIndicatorStyle] = useState({ width: 0, left: 0, opacity: 0 });
+  const booksRef = useRef<HTMLAnchorElement>(null);
+  const settingsRef = useRef<HTMLAnchorElement>(null);
 
   const isActive = (path: string) => {
     return location.pathname === path;
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      toast.success('Successfully logged out');
-      navigate('/');
-    } catch (error) {
-      toast.error('Failed to logout');
+  const isHomePage = location.pathname === '/';
+
+  // Update indicator position based on active tab
+  useEffect(() => {
+    if (isHomePage) {
+      setIndicatorStyle({ width: 0, left: 0, opacity: 0 });
+      return;
     }
-  };
+
+    let activeRef: React.RefObject<HTMLAnchorElement> | null = null;
+    
+    if (isActive('/notion')) {
+      activeRef = booksRef;
+    } else if (isActive('/settings')) {
+      activeRef = settingsRef;
+    }
+
+    if (activeRef?.current) {
+      const element = activeRef.current;
+      const rect = element.getBoundingClientRect();
+      const navRect = element.closest('.navbar-links')?.getBoundingClientRect();
+      
+      if (navRect) {
+        setIndicatorStyle({
+          width: rect.width,
+          left: rect.left - navRect.left,
+          opacity: 1
+        });
+      }
+    } else {
+      setIndicatorStyle({ width: 0, left: 0, opacity: 0 });
+    }
+  }, [location.pathname, isHomePage]);
 
   return (
     <nav className="bg-white shadow-sm border-b">
@@ -31,23 +54,36 @@ const Navbar: React.FC = () => {
               Notion Books
             </Link>
             
-            <div className="hidden md:flex items-center space-x-6">
+            <div className="hidden md:flex items-center space-x-6 relative navbar-links">
+              {/* Animated blue rectangle indicator */}
+              <div
+                className="absolute bottom-0 h-0.5 bg-blue-600 transition-all duration-300 ease-in-out"
+                style={{
+                  width: `${indicatorStyle.width}px`,
+                  left: `${indicatorStyle.left}px`,
+                  opacity: indicatorStyle.opacity,
+                  transform: 'translateY(2px)'
+                }}
+              />
+              
               <Link
+                ref={booksRef}
                 to="/notion"
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive('/notion')
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
                 Books
               </Link>
               <Link
+                ref={settingsRef}
                 to="/settings"
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive('/settings')
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
                 Settings
@@ -55,28 +91,7 @@ const Navbar: React.FC = () => {
             </div>
           </div>
           
-          <div className="flex items-center space-x-4">
-            {isAuthenticated && user ? (
-              <div className="flex items-center space-x-3">
-                <span className="text-sm text-gray-600">
-                  Welcome, {user.name}
-                </span>
-                <button
-                  onClick={handleLogout}
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border border-gray-300 hover:border-gray-400 transition-colors"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <Link
-                to="/notion"
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border border-gray-300 hover:border-gray-400 transition-colors"
-              >
-                Connect to Notion
-              </Link>
-            )}
-          </div>
+          {/* Removed user info and logout section */}
         </div>
       </div>
     </nav>

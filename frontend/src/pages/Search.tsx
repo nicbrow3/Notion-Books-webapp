@@ -8,29 +8,12 @@ import { BookSearchResult, BookSearchResponse, SearchParams } from '../types/boo
 const Search: React.FC = () => {
   const [searchResults, setSearchResults] = useState<BookSearchResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error' | 'idle'>('idle');
   const [selectedBook, setSelectedBook] = useState<BookSearchResult | null>(null);
 
   // Test API connection on component mount
-  useEffect(() => {
-    const testConnection = async () => {
-      try {
-        const result = await BookService.testConnection();
-        if (result.success) {
-          setConnectionStatus('connected');
-          toast.success('Connected to Google Books API');
-        } else {
-          setConnectionStatus('error');
-          toast.error(`API Connection Error: ${result.message}`);
-        }
-      } catch (error) {
-        setConnectionStatus('error');
-        toast.error('Failed to connect to API');
-      }
-    };
-
-    testConnection();
-  }, []);
+  // Note: API connection testing removed from automatic mount
+  // Connection status will be determined when user performs searches
 
   const handleSearch = async (params: SearchParams) => {
     setIsLoading(true);
@@ -48,6 +31,7 @@ const Search: React.FC = () => {
       const results = await BookService.searchBooks(searchParams);
       
       setSearchResults(results);
+      setConnectionStatus('connected'); // Set connected status on successful search
       
       if (!results.books || results.books.length === 0) {
         toast.error('No books found for your search query');
@@ -57,6 +41,7 @@ const Search: React.FC = () => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       toast.error(`Search failed: ${errorMessage}`);
+      setConnectionStatus('error'); // Set error status on failed search
       console.error('Search error:', error);
     } finally {
       setIsLoading(false);
@@ -188,8 +173,6 @@ const Search: React.FC = () => {
           Search for books using the Google Books API. All available data will be displayed.
         </p>
       </div>
-
-      {renderConnectionStatus()}
 
       <SearchForm 
         onSearch={handleSearch} 
