@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { BookEdition, BookEditionsResponse } from '../types/book';
 
 interface BookEditionsModalProps {
@@ -20,6 +21,15 @@ const BookEditionsModal: React.FC<BookEditionsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalEditions, setTotalEditions] = useState(0);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    // Delay the actual close to allow animation to complete
+    setTimeout(() => {
+      onClose();
+    }, 300); // Match the exit animation duration
+  };
 
   const fetchEditions = useCallback(async () => {
     setLoading(true);
@@ -48,6 +58,7 @@ const BookEditionsModal: React.FC<BookEditionsModalProps> = ({
 
   useEffect(() => {
     if (isOpen && workKey) {
+      setIsClosing(false); // Reset closing state when modal opens
       fetchEditions();
     }
   }, [isOpen, workKey, fetchEditions]);
@@ -92,15 +103,45 @@ const BookEditionsModal: React.FC<BookEditionsModalProps> = ({
   };
 
   const handleSelectEdition = (edition: BookEdition) => {
-    onSelectEdition(edition);
-    onClose();
+    if (!isClosing) {
+      onSelectEdition(edition);
+      handleClose();
+    }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !isClosing) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+    <AnimatePresence mode="wait">
+      {(isOpen || isClosing) && (
+        <motion.div
+          key="editions-modal"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: isClosing ? 0 : 1 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isClosing) {
+              handleClose();
+            }
+          }}
+        >
+          <motion.div
+            className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ 
+              opacity: isClosing ? 0 : 1, 
+              scale: isClosing ? 0.9 : 1, 
+              y: isClosing ? 0 : 0 
+            }}
+            transition={{ 
+              type: "spring", 
+              stiffness: isClosing ? 600 : 300, 
+              damping: isClosing ? 25 : 30,
+              duration: isClosing ? 0.25 : 0.3
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -113,7 +154,7 @@ const BookEditionsModal: React.FC<BookEditionsModalProps> = ({
               </p>
             </div>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,12 +182,22 @@ const BookEditionsModal: React.FC<BookEditionsModalProps> = ({
                 <p className="text-lg font-medium">Error Loading Editions</p>
                 <p className="text-sm text-gray-600 mt-1">{error}</p>
               </div>
-              <button
+              <motion.button
                 onClick={fetchEditions}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                whileHover={{ 
+                  backgroundColor: '#1d4ed8',
+                  scale: 1.05 
+                }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ 
+                  type: "spring", 
+                  stiffness: 400, 
+                  damping: 25 
+                }}
               >
                 Try Again
-              </button>
+              </motion.button>
             </div>
           )}
 
@@ -165,9 +216,19 @@ const BookEditionsModal: React.FC<BookEditionsModalProps> = ({
           {!loading && !error && editions.length > 0 && (
             <div className="space-y-4">
               {editions.map((edition, index) => (
-                <div
+                <motion.div
                   key={edition.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                  className="border border-gray-200 rounded-lg p-4 cursor-pointer"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ 
+                    borderColor: '#93c5fd',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                    scale: 1.02,
+                    transition: { duration: 0.2 }
+                  }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => handleSelectEdition(edition)}
                 >
                   <div className="flex gap-4">
@@ -277,13 +338,15 @@ const BookEditionsModal: React.FC<BookEditionsModalProps> = ({
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

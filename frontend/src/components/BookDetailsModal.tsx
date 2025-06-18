@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import './BookDetailsModal/transitions.css';
 import { BookSearchResult } from '../types/book';
@@ -98,16 +99,27 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
   const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    // Delay the actual close to allow animation to complete
+    setTimeout(() => {
+      onClose();
+    }, 300); // Match the exit animation duration
+  };
 
   // Load editions and audiobook data on modal open
   useEffect(() => {
     if (isOpen && bookData.currentBook.openLibraryKey) {
+      setIsClosing(false); // Reset closing state when modal opens
       bookData.fetchAllEditionsCategories();
     }
   }, [isOpen, bookData.currentBook.openLibraryKey, bookData.fetchAllEditionsCategories]);
 
   useEffect(() => {
     if (isOpen && !bookData.currentBook.audiobookData && !bookData.loadingAudiobook) {
+      setIsClosing(false); // Reset closing state when modal opens
       bookData.fetchAudiobookData();
     }
   }, [isOpen, bookData.currentBook.audiobookData, bookData.loadingAudiobook, bookData.fetchAudiobookData]);
@@ -224,7 +236,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   const handleAddAnotherBook = () => {
     notionIntegration.setShowSuccessModal(false);
     notionIntegration.setSuccessModalData(null);
-    onClose();
+    handleClose();
   };
 
   // Handler functions that delegate to hooks
@@ -323,20 +335,39 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isClosing) return null;
 
   return (
-    <div 
-      className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClose();
-      }}
-    >
-      <div 
-        className="modal-enter-active bg-white rounded-lg max-w-6xl w-full max-h-[95vh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AnimatePresence mode="wait">
+      {(isOpen || isClosing) && (
+        <motion.div
+          key="book-details-modal"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: isClosing ? 0 : 1 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isClosing) {
+              handleClose();
+            }
+          }}
+        >
+          <motion.div
+            className="bg-white rounded-lg max-w-6xl w-full max-h-[95vh] overflow-hidden shadow-2xl"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ 
+              opacity: isClosing ? 0 : 1, 
+              scale: isClosing ? 0.9 : 1, 
+              y: isClosing ? 0 : 0 
+            }}
+            transition={{ 
+              type: "spring", 
+              stiffness: isClosing ? 600 : 300, 
+              damping: isClosing ? 25 : 30,
+              duration: isClosing ? 0.25 : 0.3
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -349,7 +380,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
               </p>
             </div>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
               <X size={24} weight="light" />
@@ -412,9 +443,9 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           onCheckForDuplicates={() => notionIntegration.checkForDuplicates(true)}
           onAddToNotion={addToNotionWithData}
         />
-      </div>
+          </motion.div>
 
-      {/* Manual Mapping Modal */}
+          {/* Manual Mapping Modal */}
       {showManualMappingModal && (
         <ManualMappingModal
           isOpen={showManualMappingModal}
@@ -503,10 +534,17 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
             const savedDefault = CategoryService.getFieldDefault(fieldNameForDefault.toLowerCase());
             
             // For audiobook-related fields, only use audiobook default if audiobook data is actually loaded
-            if (savedDefault === 'audiobook' && editingField !== 'pageCount') {
+            if ((savedDefault === 'audiobook' || savedDefault === 'audiobook_summary') && editingField !== 'pageCount') {
               if (bookData.currentBook.audiobookData && !bookData.loadingAudiobook) {
                 switch (editingField) {
                   case 'description':
+                    if (savedDefault === 'audiobook' && bookData.currentBook.audiobookData.description) {
+                      return savedDefault;
+                    }
+                    if (savedDefault === 'audiobook_summary' && bookData.currentBook.audiobookData.summary) {
+                      return savedDefault;
+                    }
+                    // If the specific audiobook data isn't available, fallback to original
                     if (bookData.currentBook.audiobookData.description || bookData.currentBook.audiobookData.summary) {
                       return savedDefault;
                     }
@@ -536,8 +574,10 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
           onSelect={handleSourceSelected}
         />
       )}
-    </div>
-  );
-};
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  };
 
 export default BookDetailsModal; 

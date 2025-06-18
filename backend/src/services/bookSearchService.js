@@ -140,48 +140,81 @@ class BookSearchService {
         fields: 'key,title,author_name,first_publish_year,edition_count,subject,isbn,number_of_pages_median,publisher,cover_i,language'
       };
 
-             // Format query based on search type
-       if (searchType === 'isbn') {
-         params.isbn = query;
-       } else if (searchType === 'title') {
-         params.title = query;
-       } else if (searchType === 'author') {
-         params.author = query;
-       } else {
-         // For general searches, try to improve query for better results
-         let searchQuery = query;
-         
-         // Special handling for Harry Potter queries
-         if (query.toLowerCase().includes('harry potter')) {
-           // Try to extract book number or subtitle
-           const numberMatch = query.match(/(\d+)/);
-           if (numberMatch) {
-             const bookNumber = parseInt(numberMatch[1]);
-             const harryPotterTitles = {
-               1: 'Harry Potter and the Philosopher\'s Stone',
-               2: 'Harry Potter and the Chamber of Secrets',
-               3: 'Harry Potter and the Prisoner of Azkaban',
-               4: 'Harry Potter and the Goblet of Fire',
-               5: 'Harry Potter and the Order of the Phoenix',
-               6: 'Harry Potter and the Half-Blood Prince',
-               7: 'Harry Potter and the Deathly Hallows'
-             };
-             
-             if (harryPotterTitles[bookNumber]) {
-               searchQuery = harryPotterTitles[bookNumber];
-               params.title = searchQuery;
-               params.author = 'J.K. Rowling';
-               console.log(`🪄 Enhanced Harry Potter search: "${searchQuery}"`);
-             } else {
-               params.q = searchQuery;
-             }
-           } else {
-             params.q = searchQuery;
-           }
-         } else {
-           params.q = searchQuery;
-         }
-       }
+      // Format query based on search type
+      if (searchType === 'isbn') {
+        params.isbn = query;
+      } else if (searchType === 'title') {
+        params.title = query;
+      } else if (searchType === 'author') {
+        params.author = query;
+      } else {
+        // For general searches, try to improve query for better results
+        let searchQuery = query;
+        
+        // Try to extract author from query for better targeting
+        const queryLower = query.toLowerCase();
+        let detectedAuthor = null;
+        let detectedTitle = queryLower;
+        
+        // Author detection patterns
+        const authorPatterns = [
+          /\bby\s+([a-z\.\s]+?)(?:\s|$)/i,
+          /\b([a-z]+(?:\s+[a-z]\.?)?\s+[a-z]+)\b/i
+        ];
+        
+        for (const pattern of authorPatterns) {
+          const match = queryLower.match(pattern);
+          if (match && match[1]) {
+            const potentialAuthor = match[1].trim();
+            // Simple validation - author names are usually 2-4 words
+            const words = potentialAuthor.split(/\s+/);
+            if (words.length >= 2 && words.length <= 4 && 
+                words.every(word => word.length > 1 && /^[a-z\.]+$/i.test(word))) {
+              detectedAuthor = potentialAuthor;
+              detectedTitle = queryLower.replace(match[0], '').trim();
+              break;
+            }
+          }
+        }
+        
+        // If we detected an author, use targeted search
+        if (detectedAuthor && detectedTitle) {
+          params.author = detectedAuthor;
+          params.title = detectedTitle;
+          console.log(`🎯 Enhanced search with author: "${detectedAuthor}" and title: "${detectedTitle}"`);
+        } else {
+          // Special handling for Harry Potter queries
+          if (query.toLowerCase().includes('harry potter')) {
+            // Try to extract book number or subtitle
+            const numberMatch = query.match(/(\d+)/);
+            if (numberMatch) {
+              const bookNumber = parseInt(numberMatch[1]);
+              const harryPotterTitles = {
+                1: 'Harry Potter and the Philosopher\'s Stone',
+                2: 'Harry Potter and the Chamber of Secrets',
+                3: 'Harry Potter and the Prisoner of Azkaban',
+                4: 'Harry Potter and the Goblet of Fire',
+                5: 'Harry Potter and the Order of the Phoenix',
+                6: 'Harry Potter and the Half-Blood Prince',
+                7: 'Harry Potter and the Deathly Hallows'
+              };
+              
+              if (harryPotterTitles[bookNumber]) {
+                searchQuery = harryPotterTitles[bookNumber];
+                params.title = searchQuery;
+                params.author = 'J.K. Rowling';
+                console.log(`🪄 Enhanced Harry Potter search: "${searchQuery}"`);
+              } else {
+                params.q = searchQuery;
+              }
+            } else {
+              params.q = searchQuery;
+            }
+          } else {
+            params.q = searchQuery;
+          }
+        }
+      }
 
       console.log(`🔍 Searching Open Library directly: ${JSON.stringify(params)}`);
 
@@ -284,33 +317,155 @@ class BookSearchService {
       const queryLower = query.toLowerCase();
       const titleLower = book.title.toLowerCase();
       
+      // Try to extract author from query (handles queries like "andy weir project hail mary")
+      const queryWords = queryLower.split(/\s+/);
+      let detectedAuthor = null;
+      let remainingQuery = queryLower;
+      
+      // Common author patterns in queries
+      const authorPatterns = [
+        // "by [author]" pattern
+        /\bby\s+([a-z\.\s]+?)(?:\s|$)/i,
+        // Look for known author name patterns (first last, first middle last, etc.)
+        /\b([a-z]+(?:\s+[a-z]\.?)?\s+[a-z]+)\b/i
+      ];
+      
+      for (const pattern of authorPatterns) {
+        const match = queryLower.match(pattern);
+        if (match && match[1]) {
+          const potentialAuthor = match[1].trim();
+          // Check if this potential author matches any of the book's authors
+          if (book.authors.some(author => 
+            author.toLowerCase().includes(potentialAuthor) || 
+            potentialAuthor.includes(author.toLowerCase())
+          )) {
+            detectedAuthor = potentialAuthor;
+            remainingQuery = queryLower.replace(match[0], '').trim();
+            break;
+          }
+        }
+      }
+      
+      // If no explicit author pattern, check if query contains author name
+      if (!detectedAuthor) {
+        for (const author of book.authors) {
+          const authorLower = author.toLowerCase();
+          const authorWords = authorLower.split(/\s+/);
+          
+          // Check for full name match
+          if (queryLower.includes(authorLower)) {
+            detectedAuthor = authorLower;
+            remainingQuery = queryLower.replace(authorLower, '').trim();
+            break;
+          }
+          
+          // Check for last name match (if it's distinctive)
+          const lastName = authorWords[authorWords.length - 1];
+          if (lastName.length > 3 && queryLower.includes(lastName)) {
+            // Make sure it's not a common word that could be part of title
+            const commonWords = ['king', 'smith', 'brown', 'white', 'black', 'green', 'stone', 'wood', 'hill'];
+            if (!commonWords.includes(lastName)) {
+              detectedAuthor = lastName;
+              remainingQuery = queryLower.replace(lastName, '').trim();
+              break;
+            }
+          }
+        }
+      }
+      
+      // Calculate author match score (significantly increased importance)
+      let authorScore = 0;
+      let hasCorrectAuthor = false;
+      
+      if (detectedAuthor) {
+        // Query contains author information
+        for (const author of book.authors) {
+          const authorLower = author.toLowerCase();
+          if (authorLower === detectedAuthor) {
+            authorScore = 80; // Exact author match - very high score
+            hasCorrectAuthor = true;
+            break;
+          } else if (authorLower.includes(detectedAuthor) || detectedAuthor.includes(authorLower)) {
+            authorScore = Math.max(authorScore, 60); // Partial author match
+            hasCorrectAuthor = true;
+          } else {
+            // Check for last name matches
+            const authorWords = authorLower.split(/\s+/);
+            const detectedWords = detectedAuthor.split(/\s+/);
+            const authorLastName = authorWords[authorWords.length - 1];
+            const detectedLastName = detectedWords[detectedWords.length - 1];
+            
+            if (authorLastName === detectedLastName && authorLastName.length > 3) {
+              authorScore = Math.max(authorScore, 40); // Last name match
+              hasCorrectAuthor = true;
+            }
+          }
+        }
+        
+        // Heavy penalty for books with wrong authors when author is specified in query
+        if (!hasCorrectAuthor) {
+          score -= 50; // Major penalty for wrong author
+        }
+      } else {
+        // No author detected in query - check if query might contain author anyway
+        for (const author of book.authors) {
+          const authorLower = author.toLowerCase();
+          if (queryLower.includes(authorLower)) {
+            authorScore = 30; // Bonus for author match even if not explicitly detected
+            hasCorrectAuthor = true;
+            remainingQuery = queryLower.replace(authorLower, '').trim();
+            break;
+          }
+        }
+      }
+      
+      score += authorScore;
+      
+      // Title matching - use remaining query after removing author
+      const titleQuery = remainingQuery || queryLower;
+      
       // Exact title match gets highest score
-      if (titleLower === queryLower) score += 100;
-      else if (titleLower.includes(queryLower)) score += 50;
-      else if (queryLower.includes(titleLower)) score += 30;
+      if (titleLower === titleQuery) {
+        score += 100;
+      } else if (titleLower.includes(titleQuery)) {
+        score += 70;
+      } else if (titleQuery.includes(titleLower)) {
+        score += 50;
+      } else {
+        // Word-based matching for title
+        const titleWords = titleQuery.split(/\s+/).filter(word => word.length > 2);
+        const bookTitleWords = titleLower.split(/\s+/).filter(word => word.length > 2);
+        
+        if (titleWords.length > 0) {
+          const matchingWords = titleWords.filter(word => 
+            bookTitleWords.some(bookWord => 
+              bookWord.includes(word) || word.includes(bookWord)
+            )
+          );
+          
+          const titleMatchRatio = matchingWords.length / titleWords.length;
+          score += titleMatchRatio * 40;
+          
+          // Bonus for exact word matches
+          const exactWordMatches = titleWords.filter(word => bookTitleWords.includes(word));
+          score += exactWordMatches.length * 5;
+        }
+      }
       
-      // Author match
-      if (book.authors.some(author => author.toLowerCase().includes(queryLower))) score += 20;
+      // Quality indicators (reduced importance to prioritize author/title matching)
+      if (book.pageCount && book.pageCount > 0) score += 3;
+      if (book.originalPublishedDate && book.originalPublishedDate !== book.publishedDate) score += 2;
+      if (book.thumbnail) score += 2;
+      if (book.isbn13 || book.isbn10) score += 2;
       
-      // Has page count (important for books)
-      if (book.pageCount && book.pageCount > 0) score += 10;
-      
-      // Has original publication date
-      if (book.originalPublishedDate && book.originalPublishedDate !== book.publishedDate) score += 5;
-      
-      // Has cover image
-      if (book.thumbnail) score += 5;
-      
-      // Prefer books with ISBNs
-      if (book.isbn13 || book.isbn10) score += 5;
-      
-      // Penalize very old or very new publication dates for popular queries
+      // Publication date reasonableness check
       if (book.originalPublishedDate) {
         const year = parseInt(book.originalPublishedDate);
-        if (year > 1800 && year < 2025) score += 3;
+        if (year > 1800 && year < 2025) score += 1;
       }
-
-      return score;
+      
+      // Ensure minimum score is 0
+      return Math.max(0, Math.round(score));
     };
 
     // Helper function to create a normalized title for deduplication

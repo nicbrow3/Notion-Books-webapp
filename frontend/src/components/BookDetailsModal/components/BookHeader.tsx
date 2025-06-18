@@ -1,4 +1,6 @@
 import React from 'react';
+import { motion, useMotionValue, useTransform, animate } from 'motion/react';
+import { useEffect } from 'react';
 import { BookSearchResult } from '../../../types/book';
 import { 
   BookOpenIcon,
@@ -25,6 +27,66 @@ const BookHeader: React.FC<BookHeaderProps> = ({
   onSelectSource,
   formatDate
 }) => {
+  // Motion values for animations
+  const pageCountValue = useMotionValue(0);
+  const audiobookDurationValue = useMotionValue(0);
+  
+  // Transform motion values to rounded integers
+  const animatedPageCount = useTransform(() => Math.round(pageCountValue.get()));
+  const animatedAudiobookDuration = useTransform(() => Math.round(audiobookDurationValue.get()));
+  const animatedAudiobookDurationDecimal = useTransform(() => (audiobookDurationValue.get() / 10).toFixed(1));
+
+  // Set up animations when component mounts or book data changes
+  useEffect(() => {
+    const controls: Array<ReturnType<typeof animate>> = [];
+    
+    // Calculate duration based on page count (scaled for ~1000 pages max)
+    const baseDuration = 0.8; // Minimum duration
+    const maxDuration = 2.5;  // Maximum duration at ~1000 pages
+    const pageCount = book.pageCount || 200; // Default fallback
+    const scalingFactor = Math.min(pageCount / 1000, 1); // Cap at 1000 pages
+    const animationDuration = baseDuration + (scalingFactor * (maxDuration - baseDuration));
+    
+    // More dramatic easing - spends 30% of total time on just the last 5% of numbers
+    const dramaticEasing = (t: number) => {
+      // First 70% of time rushes through 95% of numbers
+      if (t < 0.7) {
+        return (t / 0.7) * 0.95; // Linear rush through most numbers
+      } else {
+        // Last 30% of time crawls through final 5% of numbers
+        const remainingProgress = (t - 0.7) / 0.3; // 0 to 1 for the last 30% of time
+        const verySlowEase = Math.pow(remainingProgress, 0.3); // Very slow progression
+        return 0.95 + (verySlowEase * 0.05);
+      }
+    };
+    
+    // Animate page count
+    if (book.pageCount) {
+      const pageCountAnimation = animate(pageCountValue, book.pageCount, { 
+        duration: animationDuration,
+        ease: dramaticEasing
+      });
+      controls.push(pageCountAnimation);
+    }
+    
+    // Animate audiobook duration (uses same duration as page count)
+    if (book.audiobookData?.totalDurationHours) {
+      const targetValue = book.audiobookData.totalDurationHours < 1 
+        ? Math.round(book.audiobookData.totalDurationHours * 60)
+        : book.audiobookData.totalDurationHours * 10; // Multiply by 10 for decimal precision
+      
+      const audiobookAnimation = animate(audiobookDurationValue, targetValue, { 
+        duration: animationDuration,
+        ease: dramaticEasing
+      });
+      controls.push(audiobookAnimation);
+    }
+    
+    return () => {
+      controls.forEach(control => control.stop());
+    };
+  }, [book.pageCount, book.audiobookData?.totalDurationHours, pageCountValue, audiobookDurationValue]);
+
   return (
     <div className="flex items-start gap-6 mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
       {/* Large Cover Image */}
@@ -117,14 +179,14 @@ const BookHeader: React.FC<BookHeaderProps> = ({
                 weight={ICON_WEIGHTS.FILL} 
                 className="text-gray-600" 
               />
-              <span className="font-medium">{book.pageCount} pages</span>
-              {getFieldSources('pageCount').length > 1 && (
-                <CaretDownIcon 
-                  size={ICON_CONTEXTS.BOOK_HEADER.INDICATORS} 
-                  weight={ICON_WEIGHTS.FILL} 
-                  className="text-gray-500" 
-                />
-              )}
+              <span className="font-medium">
+                <motion.span 
+                  className="inline-block text-right tabular-nums"
+                  style={{ minWidth: `${book.pageCount.toString().length * 0.6}em` }}
+                >
+                  {animatedPageCount}
+                </motion.span> pages
+              </span>
             </div>
           )}
           {book.audiobookData?.totalDurationHours && (
@@ -136,8 +198,22 @@ const BookHeader: React.FC<BookHeaderProps> = ({
               />
               <span className="font-medium">
                 {book.audiobookData.totalDurationHours < 1 
-                  ? `${Math.round(book.audiobookData.totalDurationHours * 60)} min`
-                  : `${book.audiobookData.totalDurationHours.toFixed(1)} hrs`}
+                  ? <>
+                      <motion.span 
+                        className="inline-block text-right tabular-nums"
+                        style={{ minWidth: `${Math.round(book.audiobookData.totalDurationHours * 60).toString().length * 0.6}em` }}
+                      >
+                        {animatedAudiobookDuration}
+                      </motion.span> min
+                    </>
+                  : <>
+                      <motion.span 
+                        className="inline-block text-right tabular-nums"
+                        style={{ minWidth: `${book.audiobookData.totalDurationHours.toFixed(1).length * 0.6}em` }}
+                      >
+                        {animatedAudiobookDurationDecimal}
+                      </motion.span> hrs
+                    </>}
               </span>
             </div>
           )}

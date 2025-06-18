@@ -1,7 +1,7 @@
 export interface CategorySettings {
   ignoredCategories: string[];
   categoryMappings: { [key: string]: string }; // Maps similar categories to preferred names
-  fieldDefaults: { [fieldName: string]: 'audiobook' | 'original' | number }; // Default sources for each field
+  fieldDefaults: { [fieldName: string]: 'audiobook' | 'original' | 'audiobook_summary' | number }; // Default sources for each field
   overriddenDefaultMappings?: string[]; // Categories where default mapping should be ignored
   autoFilterLocations?: boolean; // Automatically filter out location genres
   splitCommas?: boolean; // Split genres by commas
@@ -864,7 +864,7 @@ export class CategoryService {
   /**
    * Set default source for a field
    */
-  static setFieldDefault(fieldName: string, defaultSource: 'audiobook' | 'original' | number): void {
+  static setFieldDefault(fieldName: string, defaultSource: 'audiobook' | 'original' | 'audiobook_summary' | number): void {
     const settings = this.loadSettings();
     const key = fieldName.toLowerCase();
     settings.fieldDefaults[key] = defaultSource;
@@ -874,7 +874,7 @@ export class CategoryService {
   /**
    * Get default source for a field
    */
-  static getFieldDefault(fieldName: string): 'audiobook' | 'original' | number | null {
+  static getFieldDefault(fieldName: string): 'audiobook' | 'original' | 'audiobook_summary' | number | null {
     const settings = this.loadSettings();
     const key = fieldName.toLowerCase();
     return (settings.fieldDefaults[key] ?? settings.fieldDefaults[fieldName]) || null;

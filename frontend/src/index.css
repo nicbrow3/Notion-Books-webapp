@@ -54,4 +54,12 @@ code {
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* 
+  Global style to prevent background interactions when a modal is open.
+  This is used to stop "sticky hover" effects on cards behind the modal.
+*/
+body.modal-is-open .book-card-wrapper {
+  pointer-events: none;
 } 

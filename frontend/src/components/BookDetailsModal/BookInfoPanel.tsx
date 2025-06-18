@@ -457,23 +457,23 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
 
     // Use saved defaults if available
     if (savedDescriptionDefault !== null && fieldSelections.description === 'original') {
-      newSelections.description = savedDescriptionDefault;
+      newSelections.description = savedDescriptionDefault as 'audiobook' | 'original' | 'audiobook_summary' | number;
       hasChanges = true;
     }
-    if (savedPublisherDefault !== null && fieldSelections.publisher === 'original') {
-      newSelections.publisher = savedPublisherDefault;
+    if (savedPublisherDefault !== null && savedPublisherDefault !== 'audiobook_summary' && fieldSelections.publisher === 'original') {
+      newSelections.publisher = savedPublisherDefault as 'audiobook' | 'original' | number;
       hasChanges = true;
     }
-    if (savedPageCountDefault !== null && savedPageCountDefault !== 'audiobook' && fieldSelections.pageCount === 'original') {
+    if (savedPageCountDefault !== null && savedPageCountDefault !== 'audiobook' && savedPageCountDefault !== 'audiobook_summary' && fieldSelections.pageCount === 'original') {
       newSelections.pageCount = savedPageCountDefault as 'original' | number;
       hasChanges = true;
     }
-    if (savedReleaseDateDefault !== null && fieldSelections.releaseDate === 'original') {
-      newSelections.releaseDate = savedReleaseDateDefault;
+    if (savedReleaseDateDefault !== null && savedReleaseDateDefault !== 'audiobook_summary' && fieldSelections.releaseDate === 'original') {
+      newSelections.releaseDate = savedReleaseDateDefault as 'published' | 'original' | 'audiobook' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
       hasChanges = true;
     }
-    if (savedThumbnailDefault !== null && fieldSelections.thumbnail === 'original') {
-      newSelections.thumbnail = savedThumbnailDefault;
+    if (savedThumbnailDefault !== null && savedThumbnailDefault !== 'audiobook_summary' && fieldSelections.thumbnail === 'original') {
+      newSelections.thumbnail = savedThumbnailDefault as 'original' | 'audiobook' | number;
       hasChanges = true;
     }
 

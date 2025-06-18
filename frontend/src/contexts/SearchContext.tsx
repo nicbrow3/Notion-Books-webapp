@@ -10,6 +10,7 @@ interface SearchContextType {
   handleSearch: (params: SearchParams) => Promise<void>;
   handleBookSelect: (book: BookSearchResult) => void;
   clearSearch: () => void;
+  clearSelectedBook: () => void;
 }
 
 const SearchContext = createContext<SearchContextType | undefined>(undefined);
@@ -65,6 +66,10 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
     setSelectedBook(null);
   };
 
+  const clearSelectedBook = () => {
+    setSelectedBook(null);
+  };
+
   return (
     <SearchContext.Provider value={{
       isSearching,
@@ -72,7 +77,8 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
       selectedBook,
       handleSearch,
       handleBookSelect,
-      clearSearch
+      clearSearch,
+      clearSelectedBook
     }}>
       {children}
     </SearchContext.Provider>

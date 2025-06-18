@@ -120,16 +120,24 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
 
   // Determine row styling based on data availability and mapping status
   const getRowStyling = () => {
+    let baseStyles = '';
+    
     if (!hasData && !isMapped) {
-      return 'opacity-50 bg-gray-50';
+      baseStyles = 'opacity-50 bg-gray-50';
+    } else if (hasData && !isMapped) {
+      baseStyles = 'bg-orange-50 border-l-4 border-orange-300';
+    } else if (hasData && isMapped) {
+      baseStyles = 'bg-green-50 border-l-4 border-green-300';
+    } else {
+      baseStyles = 'bg-gray-50';
     }
-    if (hasData && !isMapped) {
-      return 'bg-orange-50 border-l-4 border-orange-300';
+    
+    // Add hover styles only for clickable rows
+    if (isClickable) {
+      baseStyles += ' hover:!bg-blue-100/50';
     }
-    if (hasData && isMapped) {
-      return 'bg-green-50 border-l-4 border-green-300';
-    }
-    return 'bg-gray-50';
+    
+    return baseStyles;
   };
 
   // Format display value
@@ -210,8 +218,11 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
       if (categories.length === 0) {
         return (
           <span 
-            className="text-gray-400 italic cursor-pointer hover:text-gray-600 transition-colors" 
-            onClick={onOpenCategoriesModal}
+            className="categories-clickable text-gray-400 italic cursor-pointer hover:text-gray-600 transition-colors" 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenCategoriesModal) onOpenCategoriesModal();
+            }}
             title="Click to select categories"
           >
             No categories selected
@@ -228,8 +239,11 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
       return (
         <div className="text-sm">
           <div 
-            className="flex flex-wrap gap-1 cursor-pointer" 
-            onClick={onOpenCategoriesModal}
+            className="categories-clickable flex flex-wrap gap-1 cursor-pointer" 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenCategoriesModal) onOpenCategoriesModal();
+            }}
             title="Click to manage categories"
           >
             {displayCategories.map((category, index) => (
@@ -290,8 +304,32 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
     return <span className="text-sm">{value}</span>;
   };
 
+  // Handle row click to open source selection (only if multiple sources available)
+  const handleRowClick = (e: React.MouseEvent) => {
+    // Don't trigger if clicking on interactive elements
+    if ((e.target as HTMLElement).closest('button, select, .categories-clickable')) {
+      return;
+    }
+    
+    // Only open source selection if there are multiple sources
+    if (sources.length > 1) {
+      onSelectSource(field.id);
+    }
+  };
+
+  // Determine if row should be clickable
+  const isClickable = sources.length > 1;
+
   return (
-    <div className={`book-data-row grid grid-cols-4 gap-4 p-3 rounded-lg transition-all ${getRowStyling()}`}>
+    <div 
+      className={`book-data-row grid grid-cols-4 gap-4 p-3 rounded-lg transition-all ${getRowStyling()} ${
+        isClickable 
+          ? 'cursor-pointer hover:shadow-sm' 
+          : ''
+      }`}
+      onClick={handleRowClick}
+      title={isClickable ? 'Click to select source' : undefined}
+    >
       {/* Field Label */}
       <div className="flex items-center">
         <span className="font-medium text-gray-900">{field.label}</span>
@@ -311,7 +349,10 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
       <div className="flex items-center">
         {sources.length > 1 ? (
           <button
-            onClick={() => onSelectSource(field.id)}
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent row click
+              onSelectSource(field.id);
+            }}
             className="source-button text-xs border border-gray-300 rounded px-2 py-1 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500 flex items-center gap-1"
           >
             {getCurrentSourceLabel()}
@@ -340,6 +381,7 @@ const BookDataRow: React.FC<BookDataRowProps> = ({
           <select
             value={currentMapping}
             onChange={(e) => onTempFieldMappingChange(field.id, e.target.value)}
+            onClick={(e) => e.stopPropagation()}
             className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
           >
             <option value="">Don't map</option>

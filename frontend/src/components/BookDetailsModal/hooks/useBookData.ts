@@ -211,6 +211,11 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
         needsUpdate = true;
       }
       
+      if (savedDescriptionDefault === 'audiobook_summary' && currentBook.audiobookData.summary && updatedSelections.description !== 'audiobook_summary') {
+        updatedSelections.description = 'audiobook_summary';
+        needsUpdate = true;
+      }
+      
       if (savedPublisherDefault === 'audiobook' && currentBook.audiobookData.publisher && updatedSelections.publisher !== 'audiobook') {
         updatedSelections.publisher = 'audiobook';
         needsUpdate = true;

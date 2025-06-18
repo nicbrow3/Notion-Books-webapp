@@ -393,7 +393,7 @@ const BookDataTable: React.FC<BookDataTableProps> = ({
 
   return (
     <div>
-      <div className="sticky top-0 z-10 grid grid-cols-4 gap-4 p-3 mb-2 bg-gray-100 rounded-lg text-sm font-medium text-gray-700">
+      <div className="sticky top-0 z-20 grid grid-cols-4 gap-4 p-3 mb-2 bg-gray-100 rounded-lg text-sm font-medium text-gray-700">
         <div>Field</div>
         <div>Value</div>
         <div>Source</div>
