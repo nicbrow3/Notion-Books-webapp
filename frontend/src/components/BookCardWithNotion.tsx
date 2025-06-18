@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { BookSearchResult, BookEdition } from '../types/book';
 import { NotionService } from '../services/notionService';
+import { CategoryService } from '../services/categoryService';
+import { HeadphonesIcon } from '@phosphor-icons/react';
+import { ICON_CONTEXTS, ICON_WEIGHTS } from '../constants/iconConfig';
 import BookEditionsModal from './BookEditionsModal';
 
 
@@ -235,6 +238,33 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
     );
   };
 
+  // Helper function to get the appropriate thumbnail based on user preferences
+  const getDisplayThumbnail = (): string | undefined => {
+    // Check if we have audiobook data with an image
+    if (currentBook.audiobookData?.hasAudiobook && currentBook.audiobookData.image) {
+      // Check global preference for audiobook covers
+      const preferAudiobookCovers = CategoryService.getPreferAudiobookCovers();
+      
+      // Check field-specific default for thumbnail
+      const thumbnailDefault = CategoryService.getFieldDefault('thumbnail');
+      
+      // If user has set preference for audiobook covers OR has set audiobook as thumbnail default
+      if (preferAudiobookCovers || thumbnailDefault === 'audiobook') {
+        return currentBook.audiobookData.image;
+      }
+    }
+    
+    // Default to regular book thumbnail
+    return currentBook.thumbnail || undefined;
+  };
+
+  // Helper function to check if we're showing audiobook cover
+  const isShowingAudiobookCover = (): boolean => {
+    return !!(currentBook.audiobookData?.hasAudiobook && 
+              currentBook.audiobookData.image && 
+              (CategoryService.getPreferAudiobookCovers() || CategoryService.getFieldDefault('thumbnail') === 'audiobook'));
+  };
+
   return (
     <div className="relative">
       <div 
@@ -246,19 +276,40 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
         <div className="flex gap-4">
           {/* Book Cover */}
           <div className="flex-shrink-0">
-            {currentBook.thumbnail ? (
-              <img
-                src={currentBook.thumbnail}
-                alt={`Cover of ${currentBook.title}`}
-                className="w-24 h-32 object-cover rounded shadow-sm"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
+            {getDisplayThumbnail() ? (
+              <div className="relative book-cover-container">
+                <img
+                  src={getDisplayThumbnail()}
+                  alt={`Cover of ${currentBook.title}`}
+                  className="rounded shadow-sm max-h-32 w-auto object-contain book-cover-image"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+                {/* Page curl effect - only show for regular books, not audiobooks */}
+                {!isShowingAudiobookCover() && (
+                  <div className="absolute bottom-0 right-0 w-4 h-4 page-curl-effect"></div>
+                )}
+                
+                {/* Show audiobook indicator if we're displaying audiobook cover */}
+                {(isShowingAudiobookCover()) && (
+                  <div className="absolute bottom-1 left-1 bg-purple-500 text-white p-1 rounded-full shadow-sm">
+                    <HeadphonesIcon 
+                      size={ICON_CONTEXTS.UI.INPUT} 
+                      weight={ICON_WEIGHTS.FILL} 
+                      className="text-white" 
+                    />
+                  </div>
+                )}
+              </div>
             ) : (
-              <div className="w-24 h-32 bg-gray-200 rounded shadow-sm flex items-center justify-center">
+              <div className="relative w-24 h-32 bg-gray-200 rounded shadow-sm flex items-center justify-center book-cover-container">
                 <span className="text-gray-400 text-xs text-center">No Cover</span>
+                {/* Page curl effect even for placeholder - only show for non-audiobooks */}
+                {!isShowingAudiobookCover() && (
+                  <div className="absolute bottom-0 right-0 w-4 h-4 page-curl-effect"></div>
+                )}
               </div>
             )}
           </div>

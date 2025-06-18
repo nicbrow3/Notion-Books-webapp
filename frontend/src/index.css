@@ -62,4 +62,6 @@ code {
 */
 body.modal-is-open .book-card-wrapper {
   pointer-events: none;
-} 
+}
+
+ 
