@@ -854,6 +854,18 @@ class BookSearchService {
             parts = category.split(',');
           }
           
+          // Then split each part by forward slash
+          const slashSplitParts = [];
+          parts.forEach(part => {
+            if (part.includes('/')) {
+              const slashParts = part.split('/').map(p => p.trim()).filter(p => p.length > 0);
+              slashSplitParts.push(...slashParts);
+            } else {
+              slashSplitParts.push(part);
+            }
+          });
+          parts = slashSplitParts;
+          
           // Then split each part by ampersand and "and"
           const finalParts = [];
           parts.forEach(part => {

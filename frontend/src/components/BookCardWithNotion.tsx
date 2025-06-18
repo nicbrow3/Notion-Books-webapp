@@ -83,6 +83,18 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
     }
   };
 
+  const getScoreColorClasses = (score: number) => {
+    if (score >= 100) {
+      return 'bg-green-100 text-green-700';
+    } else if (score >= 75) {
+      return 'bg-blue-100 text-blue-600';
+    } else if (score >= 50) {
+      return 'bg-orange-100 text-orange-700';
+    } else {
+      return 'bg-red-100 text-red-700';
+    }
+  };
+
   const checkForDuplicates = async () => {
     if (!isNotionConnected || !notionSettings?.databaseId) {
       return;
@@ -197,29 +209,6 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
             </span>
           )}
           
-          {duplicateStatus === 'duplicate' && (
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-orange-600 flex items-center">
-                <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                May be duplicate
-              </span>
-              {existingNotionPage && (
-                <a
-                  href={existingNotionPage.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-xs text-blue-600 hover:text-blue-800 underline"
-                  title={`View "${existingNotionPage.title}" in Notion`}
-                >
-                  View in Notion →
-                </a>
-              )}
-            </div>
-          )}
-          
           {duplicateStatus === 'unique' && (
             <span className="text-xs text-green-600 flex items-center">
               <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -228,31 +217,6 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
               Unique
             </span>
           )}
-        </div>
-
-        <div className="flex items-center space-x-2">
-          {duplicateStatus === 'unknown' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                checkForDuplicates();
-              }}
-              disabled={isCheckingDuplicates}
-              className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
-            >
-              Check Duplicates
-            </button>
-          )}
-          
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowDetailsModal(true);
-            }}
-            className="px-3 py-1 text-xs rounded font-medium bg-black text-white hover:bg-gray-800"
-          >
-            View Details & Add to Notion
-          </button>
         </div>
       </div>
     );
@@ -331,44 +295,8 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
                 <span className="font-medium">Pages:</span> {currentBook.pageCount}
               </div>
             )}
-            {currentBook.language && (
-              <div>
-                <span className="font-medium">Language:</span> {currentBook.language.toUpperCase()}
-              </div>
-            )}
-            {currentBook.isbn13 && (
-              <div>
-                <span className="font-medium">ISBN-13:</span> {currentBook.isbn13}
-              </div>
-            )}
-            {currentBook.isbn10 && (
-              <div>
-                <span className="font-medium">ISBN-10:</span> {currentBook.isbn10}
-              </div>
-            )}
+            
           </div>
-
-          {/* Categories */}
-          {currentBook.categories && currentBook.categories.length > 0 && (
-            <div className="mb-3">
-              <span className="text-xs font-medium text-gray-600">Categories: </span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {currentBook.categories.slice(0, 3).map((category, index) => (
-                  <span
-                    key={index}
-                    className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded"
-                  >
-                    {category}
-                  </span>
-                ))}
-                {currentBook.categories.length > 3 && (
-                  <span className="text-xs text-gray-500">
-                    +{currentBook.categories.length - 3} more
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* API Source Enhancement Indicators */}
           {currentBook.source === 'merged_apis' && (
@@ -402,10 +330,6 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
           {currentBook.openLibraryData && currentBook.originalPublishedDate !== currentBook.publishedDate && 
            !['merged_apis', 'open_library_primary'].includes(currentBook.source) && (
             <div className="mb-3">
-              <div className="flex items-center gap-1 text-xs text-green-600">
-                <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
-                <span>Enhanced with original publication date from Open Library</span>
-              </div>
               {currentBook.openLibraryData.editionCount && currentBook.openLibraryData.editionCount > 1 && (
                 <div className="text-xs text-gray-500 mt-1">
                   {currentBook.openLibraryData.editionCount} editions available
@@ -440,43 +364,6 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
             </div>
           )}
 
-          {/* Links */}
-          <div className="flex gap-2 text-xs mb-3">
-            {currentBook.previewLink && (
-              <a
-                href={currentBook.previewLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Preview
-              </a>
-            )}
-            {currentBook.infoLink && (
-              <a
-                href={currentBook.infoLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                More Info
-              </a>
-            )}
-            {currentBook.buyLink && (
-              <a
-                href={currentBook.buyLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-green-600 hover:text-green-800 underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Buy
-              </a>
-            )}
-          </div>
-
           {/* Source indicator */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -488,25 +375,13 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
                  `Source: ${currentBook.source}`}
               </span>
               {(currentBook as any).relevanceScore && (
-                <span className="inline-block bg-blue-100 text-blue-600 text-xs px-2 py-1 rounded">
+                <span className={`inline-block text-xs px-2 py-1 rounded ${getScoreColorClasses((currentBook as any).relevanceScore)}`}>
                   Score: {(currentBook as any).relevanceScore}
                 </span>
               )}
             </div>
-            
-            {/* View Editions Button */}
-            {currentBook.openLibraryData?.editionCount && currentBook.openLibraryData.editionCount > 1 && currentBook.openLibraryKey && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowEditionsModal(true);
-                }}
-                className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
-              >
-                View {currentBook.openLibraryData.editionCount} Editions
-              </button>
-            )}
           </div>
+
 
           {/* Notion Integration */}
           {renderNotionActions()}

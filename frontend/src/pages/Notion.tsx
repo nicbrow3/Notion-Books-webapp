@@ -44,7 +44,7 @@ const Notion: React.FC = () => {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Search Results</h2>
               <div className="text-sm text-gray-600">
-                Found {searchResults.books?.length || 0} of {searchResults.totalItems || 0} books for "{searchResults.query}"
+                Found {searchResults.books?.length || 0} books for "{searchResults.query}"
               </div>
             </div>
 
@@ -68,34 +68,6 @@ const Notion: React.FC = () => {
           </div>
         )}
 
-        {/* Selected Book Debug Info */}
-        {selectedBook && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-blue-900 mb-4">
-              Selected Book: {selectedBook.title}
-            </h3>
-            <pre className="bg-white p-4 rounded border text-xs overflow-auto max-h-96">
-              {JSON.stringify(selectedBook, null, 2)}
-            </pre>
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => handleBookSelect(null as any)}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
-              >
-                Clear Selection
-              </button>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(JSON.stringify(selectedBook, null, 2));
-                  toast.success('Book data copied to clipboard');
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-              >
-                Copy JSON
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Quick Search Examples */}
         {!searchResults && !isSearching && (

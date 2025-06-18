@@ -290,7 +290,6 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
             <option value={5}>5 results</option>
             <option value={10}>10 results</option>
             <option value={20}>20 results</option>
-            <option value={40}>40 results (max)</option>
           </select>
         </div>
 

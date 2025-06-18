@@ -198,6 +198,7 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         {
           splitCommas: currentCategorySettings.splitCommas !== false,
           splitAmpersand: currentCategorySettings.splitAmpersand !== false,
+          splitSlashes: currentCategorySettings.splitSlashes !== false,
         }
       );
 
