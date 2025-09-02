@@ -70,14 +70,12 @@ export const useNotionIntegration = ({
   const [loadingDatabaseProperties, setLoadingDatabaseProperties] = useState(false);
   
   const duplicateCheckButtonRef = useRef<HTMLButtonElement>(null);
-  const hasAutoChecked = useRef<boolean>(false);
+  const hasAutoChecked = useRef(false);
 
-  // Initialize temporary field mappings from settings
+  // Initialize temp field mappings when modal opens or settings change
   useEffect(() => {
-    if (!isOpen) return;
-    
-    if (isNotionConnected && notionSettings?.fieldMapping && !tempFieldMappings) {
-      console.log('Initializing field mappings');
+    if (isOpen && notionSettings?.fieldMapping) {
+      console.log('Initializing temp field mappings from settings');
       setTempFieldMappings({ ...notionSettings.fieldMapping });
       
       // Load database properties if not already loaded
@@ -96,7 +94,7 @@ export const useNotionIntegration = ({
           });
       }
     }
-  }, [isOpen, isNotionConnected, notionSettings?.fieldMapping, notionSettings?.databaseId, tempFieldMappings, databaseProperties, loadingDatabaseProperties]);
+  }, [isOpen, notionSettings?.fieldMapping, notionSettings?.databaseId, databaseProperties, loadingDatabaseProperties, tempFieldMappings]);
 
 
 

@@ -39,7 +39,6 @@ const Settings: React.FC = () => {
     isLoadingProperties,
     isSavingSettings,
     loadDatabases,
-    loadSettings,
     saveSettings,
     setSelectedDatabase,
     setFieldMappings,
@@ -93,14 +92,42 @@ const Settings: React.FC = () => {
     // Check field mappings changes
     if (notionSettings.fieldMapping) {
       const { pageIcon: savedPageIcon, ...savedMappings } = notionSettings.fieldMapping;
-      if (JSON.stringify({ ...fieldMappings, pageIcon: usePageIcon }) !== 
-          JSON.stringify({ ...savedMappings, pageIcon: savedPageIcon })) {
+
+      // Normalize mappings to avoid false positives due to key order or missing empty keys
+      const normalize = (m: Record<string, any>, pageIcon: boolean) => {
+        const keys = Array.from(new Set([
+          ...Object.keys(fieldMappings as Record<string, any>),
+          ...Object.keys(m || {})
+        ]));
+        const obj: Record<string, any> = {};
+        keys.forEach((k) => {
+          obj[k] = (m && m[k] !== undefined && m[k] !== null) ? m[k] : '';
+        });
+        obj.pageIcon = !!pageIcon;
+        return obj;
+      };
+
+      const deepEqual = (a: any, b: any): boolean => {
+        if (a === b) return true;
+        if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+        const aKeys = Object.keys(a);
+        const bKeys = Object.keys(b);
+        if (aKeys.length !== bKeys.length) return false;
+        for (const key of aKeys) {
+          if (!deepEqual(a[key], (b as any)[key])) return false;
+        }
+        return true;
+      };
+
+      const currentNormalized = normalize(fieldMappings as Record<string, any>, usePageIcon);
+      const savedNormalized = normalize(savedMappings as Record<string, any>, !!savedPageIcon);
+      if (!deepEqual(currentNormalized, savedNormalized)) {
         return true;
       }
     }
     
     // Check English-only sources setting change
-    if (useEnglishOnlySources !== (notionSettings.useEnglishOnlySources ?? false)) return true;
+    if (useEnglishOnlySources !== (notionSettings.useEnglishOnlySources ?? true)) return true;
     
     // Check for changes in category settings
     if (initialCategorySettings && (
@@ -295,6 +322,7 @@ const Settings: React.FC = () => {
       
       CategoryService.saveSettings(mergedCategorySettings);
       setCategorySettings(mergedCategorySettings);
+      setInitialCategorySettings(mergedCategorySettings);
       
       // Update notion settings if connected - use merge strategy for field mappings
       if (isAuthenticated && importData.notionSettings.databaseId) {
@@ -308,9 +336,9 @@ const Settings: React.FC = () => {
         };
         setFieldMappings(mergedFieldMappings);
         
-        // Set boolean preferences
+        // Set boolean preferences (default English-only to true when missing)
         setUsePageIcon(importData.notionSettings.usePageIcon || false);
-        setUseEnglishOnlySources(importData.notionSettings.useEnglishOnlySources || false);
+        setUseEnglishOnlySources(importData.notionSettings.useEnglishOnlySources ?? true);
         
         // Save to Notion settings context
         await saveSettings({
@@ -321,7 +349,8 @@ const Settings: React.FC = () => {
           },
           defaultValues: {},
           autoAddBooks: false,
-          useEnglishOnlySources: importData.notionSettings.useEnglishOnlySources,
+          // Persist English-only preference with same default semantics (true when undefined)
+          useEnglishOnlySources: importData.notionSettings.useEnglishOnlySources ?? true,
         });
       } else if (!isAuthenticated && importData.notionSettings) {
         toast.error("Notion settings imported but not applied - please connect to Notion first");
@@ -477,6 +506,7 @@ const Settings: React.FC = () => {
     CategoryService.removeCategoryMapping(fromCategory);
     const updatedSettings = CategoryService.loadSettings();
     setCategorySettings(updatedSettings);
+    setInitialCategorySettings(updatedSettings);
     toast.success(`Removed mapping for "${fromCategory}"`);
   };
 
@@ -498,7 +528,9 @@ const Settings: React.FC = () => {
     CategoryService.saveSettings(currentSettings);
     
     // Update local state
-    setCategorySettings(CategoryService.loadSettings());
+    const refreshed = CategoryService.loadSettings();
+    setCategorySettings(refreshed);
+    setInitialCategorySettings(refreshed);
     
     toast.success(`Overrode default mapping for "${fromCategory}"`);
   };
@@ -508,6 +540,7 @@ const Settings: React.FC = () => {
     CategoryService.removeIgnoredCategory(category);
     const updatedSettings = CategoryService.loadSettings();
     setCategorySettings(updatedSettings);
+    setInitialCategorySettings(updatedSettings);
     toast.success(`Removed "${category}" from ignored categories`);
   };
 
@@ -519,6 +552,7 @@ const Settings: React.FC = () => {
     };
     setCategorySettings(updatedSettings);
     CategoryService.saveSettings(updatedSettings);
+    setInitialCategorySettings(updatedSettings);
     toast.success(`Auto-filter locations ${updatedSettings.autoFilterLocations ? 'enabled' : 'disabled'}`);
   };
 
@@ -526,6 +560,7 @@ const Settings: React.FC = () => {
     const updated = { ...categorySettings, splitCommas: !categorySettings.splitCommas };
     setCategorySettings(updated);
     CategoryService.saveSettings(updated);
+    setInitialCategorySettings(updated);
     toast.success(`Split on commas ${updated.splitCommas ? 'enabled' : 'disabled'}`);
   };
 
@@ -533,6 +568,7 @@ const Settings: React.FC = () => {
     const updated = { ...categorySettings, splitAmpersand: !categorySettings.splitAmpersand };
     setCategorySettings(updated);
     CategoryService.saveSettings(updated);
+    setInitialCategorySettings(updated);
     toast.success(`Split on "&" / "and" ${updated.splitAmpersand ? 'enabled' : 'disabled'}`);
   };
 

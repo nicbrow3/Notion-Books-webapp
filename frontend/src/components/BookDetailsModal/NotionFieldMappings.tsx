@@ -6,7 +6,6 @@ import {
   ArrowClockwiseIcon, 
   SpinnerGapIcon,
   WarningIcon,
-  CheckCircleIcon,
   BookIcon,
   ImageIcon
 } from '@phosphor-icons/react';
@@ -128,7 +127,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               })()}
             </>
           )}
-          {tempFieldMappings && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && !hideUnsavedChangesIndicator && (
+          {tempFieldMappings && !hideUnsavedChangesIndicator && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && (
             <button
               onClick={onSaveTempFieldMappings}
               className="text-green-600 hover:text-green-800 hover:bg-green-50 p-1 rounded transition-colors"
@@ -140,7 +139,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
               />
             </button>
           )}
-          {tempFieldMappings && onResetTempFieldMappings && !hideUnsavedChangesIndicator && (
+          {tempFieldMappings && !hideUnsavedChangesIndicator && onResetTempFieldMappings && (
             <button
               onClick={onResetTempFieldMappings}
               className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 p-1 rounded transition-colors"
@@ -608,7 +607,7 @@ const NotionFieldMappings: React.FC<NotionFieldMappingsProps> = ({
           )}
 
           {/* Save Changes Notice */}
-          {tempFieldMappings && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && !hideUnsavedChangesIndicator && (
+          {tempFieldMappings && !hideUnsavedChangesIndicator && onSaveTempFieldMappings && onHasUnsavedChanges && onHasUnsavedChanges() && (
             <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded text-sm">
               <div className="flex items-start">
                 <WarningIcon 

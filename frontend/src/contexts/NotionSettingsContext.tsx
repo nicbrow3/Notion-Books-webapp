@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from './AuthContext';
 import { NotionService } from '../services/notionService';
@@ -101,12 +101,6 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     }
   }, [isAuthenticated]);
 
-  // Load database properties when database is selected
-  useEffect(() => {
-    if (selectedDatabase && isAuthenticated) {
-      loadDatabaseProperties(selectedDatabase);
-    }
-  }, [selectedDatabase, isAuthenticated]);
 
   const resetState = () => {
     setDatabases([]);
@@ -137,7 +131,6 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     setUsePageIcon(false);
     setUseEnglishOnlySources(true);
   };
-
   const loadDatabases = async () => {
     if (loadingDatabasesRef.current) {
       console.log('🔧 NotionSettingsContext: Database loading already in progress, skipping...');
@@ -173,7 +166,7 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     }
   };
 
-  const loadDatabaseProperties = async (databaseId: string) => {
+  const loadDatabaseProperties = useCallback(async (databaseId: string) => {
     if (!databaseId || !isAuthenticated) return;
     
     try {
@@ -188,7 +181,14 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     } finally {
       setIsLoadingProperties(false);
     }
-  };
+  }, [isAuthenticated]);
+
+  // Load database properties when database is selected (after declaration to satisfy TS/ESLint)
+  useEffect(() => {
+    if (selectedDatabase && isAuthenticated) {
+      loadDatabaseProperties(selectedDatabase);
+    }
+  }, [selectedDatabase, isAuthenticated, loadDatabaseProperties]);
 
   const loadSettings = async () => {
     if (loadingSettingsRef.current) {
@@ -270,6 +270,58 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
       
       await NotionService.saveSettings(settings);
       setNotionSettings(settings);
+      // Keep individual context slices in sync with saved settings immediately
+      // so that the UI doesn't show false unsaved changes and other parts
+      // of the app get updated values without requiring a reload.
+      try {
+        setSelectedDatabase(settings.databaseId || '');
+        const { pageIcon, ...rawMappings } = settings.fieldMapping || {};
+
+        // Migration: consolidate old date fields to releaseDate
+        let releaseDate = '';
+        if ((rawMappings as any)?.releaseDate) {
+          releaseDate = (rawMappings as any).releaseDate;
+        } else if ((rawMappings as any)?.publishedDate) {
+          releaseDate = (rawMappings as any).publishedDate;
+        } else if ((rawMappings as any)?.originalPublishedDate) {
+          releaseDate = (rawMappings as any).originalPublishedDate;
+        }
+
+        // Filter out old date field names and create new mapping object
+        const { publishedDate: _pd, originalPublishedDate: _opd, ...cleanMappings } = (rawMappings as any) || {};
+
+        const defaultMappings = {
+          title: '',
+          authors: '',
+          description: '',
+          isbn: '',
+          releaseDate: '',
+          publisher: '',
+          pageCount: '',
+          categories: '',
+          rating: '',
+          thumbnail: '',
+          status: '',
+          notes: '',
+          audiobookPublisher: '',
+          audiobookChapters: '',
+          audiobookASIN: '',
+          audiobookNarrators: '',
+          audiobookDuration: '',
+          audiobookURL: '',
+          audiobookRating: '',
+        };
+
+        setFieldMappings({
+          ...defaultMappings,
+          ...cleanMappings,
+          releaseDate,
+        });
+        setUsePageIcon(pageIcon || false);
+        setUseEnglishOnlySources(settings.useEnglishOnlySources ?? true);
+      } catch (syncError) {
+        console.warn('🔧 NotionSettingsContext: Non-fatal: failed to sync derived state after save:', syncError);
+      }
       
       const mappingCount = Object.values(settings.fieldMapping || {}).filter(Boolean).length;
       toast.success(`Settings saved! ${mappingCount} field mappings configured.`);

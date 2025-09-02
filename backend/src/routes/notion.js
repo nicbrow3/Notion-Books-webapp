@@ -16,7 +16,7 @@ const generateFieldMappings = (notionProperties) => {
   const googleBooksFields = {
     title: { type: 'title', priority: 1, keywords: ['title', 'name', 'book'] },
     authors: { type: 'multi_select', priority: 1, keywords: ['author', 'authors', 'writer', 'by'] },
-    isbn13: { type: 'rich_text', priority: 1, keywords: ['isbn', 'isbn13', 'isbn-13'] },
+    isbn13: { type: 'rich_text', priority: 1, keywords: ['isbn', 'isbn13', 'isbn-13', 'isbn_13'] },
     isbn10: { type: 'rich_text', priority: 2, keywords: ['isbn10', 'isbn-10'] },
     description: { type: 'rich_text', priority: 1, keywords: ['description', 'summary', 'synopsis', 'about'] },
     categories: { type: 'multi_select', priority: 1, keywords: ['category', 'categories', 'genre', 'genres', 'subject', 'subjects'] },
@@ -28,12 +28,12 @@ const generateFieldMappings = (notionProperties) => {
     averageRating: { type: 'number', priority: 2, keywords: ['rating', 'score', 'stars'] },
     ratingsCount: { type: 'number', priority: 3, keywords: ['ratings', 'reviews', 'count'] },
     // Audiobook-specific fields
-    audiobookPublisher: { type: 'select', priority: 2, keywords: ['audiobook', 'audio', 'publisher', 'audible', 'narrator', 'voice'] },
+    audiobookPublisher: { type: 'select', priority: 2, keywords: ['audiobook', 'audio', 'publisher', 'audible'] },
     audiobookPublishedDate: { type: 'date', priority: 2, keywords: ['audiobook', 'audio', 'published', 'release', 'date'] },
     audiobookChapters: { type: 'number', priority: 2, keywords: ['chapters', 'chapter', 'parts', 'sections', 'audiobook'] },
     audiobookASIN: { type: 'rich_text', priority: 2, keywords: ['asin', 'amazon', 'audible', 'id', 'identifier'] },
     audiobookNarrators: { type: 'multi_select', priority: 2, keywords: ['narrator', 'narrators', 'voice', 'reader', 'audiobook'] },
-    audiobookDuration: { type: 'rich_text', priority: 2, keywords: ['duration', 'length', 'time', 'runtime', 'hours', 'minutes'] },
+    audiobookDuration: { type: 'rich_text', priority: 2, keywords: ['duration', 'length', 'time', 'runtime', 'hours', 'minutes', 'audiobook hours', 'audiobook (hours)'] },
     audiobookURL: { type: 'url', priority: 2, keywords: ['url', 'link', 'audible', 'audiobook', 'purchase'] },
     audiobookRating: { type: 'rich_text', priority: 2, keywords: ['rating', 'score', 'stars'] }
   };

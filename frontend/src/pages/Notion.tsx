@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useSearch } from '../contexts/SearchContext';
 import { useNotionSettings } from '../contexts/NotionSettingsContext';
-import { SearchParams } from '../types/book';
 import SearchForm from '../components/SearchForm';
 import BookCardWithNotion from '../components/BookCardWithNotion';
 import BookDetailsModal from '../components/BookDetailsModal';
@@ -14,9 +12,9 @@ const Notion: React.FC = () => {
   // Use auth context instead of local state
   const { isAuthenticated } = useAuth();
   // Use search context instead of local state
-  const { isSearching, searchResults, selectedBook, handleSearch, handleBookSelect, clearSearch, clearSelectedBook } = useSearch();
+  const { isSearching, searchResults, selectedBook, handleSearch, handleBookSelect, clearSelectedBook } = useSearch();
   // Use notion settings context
-  const { notionSettings } = useNotionSettings();
+  const { notionSettings, loadSettings } = useNotionSettings();
   
   // Track modal state to disable hover effects when modal is open
   const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
@@ -42,8 +40,9 @@ const Notion: React.FC = () => {
     }, 300); // Match the modal's exit animation duration
   };
 
-  const handleSettingsUpdated = (updatedSettings: any) => {
-    // Handle settings update if needed
+  const handleSettingsUpdated = async (_updatedSettings: any) => {
+    // Reload settings from localStorage into context so the whole app state updates
+    await loadSettings();
   };
 
   // Filter function to exclude book summaries, reviews, and analysis

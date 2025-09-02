@@ -11,7 +11,7 @@ export const getApiBaseUrl = (): string => {
   }
   
   // Fallback to environment variable or localhost for development
-  const fallbackUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+  const fallbackUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
   console.log('🔗 Using fallback API URL:', fallbackUrl);
   return fallbackUrl;
 };
