@@ -136,7 +136,6 @@ export const useCategoryManagement = ({
       if (settingsToUse.autoFilterLocations) {
         categoriesToSelect = categoriesToSelect.filter(cat => {
           if (CategoryService.isGeographicalCategory(cat)) {
-            console.log(`Auto-deselecting location-based category: "${cat}"`);
             return false;
           }
           return true;
@@ -184,7 +183,6 @@ export const useCategoryManagement = ({
     
     // Force reprocessing when category settings change
     if (hasProcessedCategoriesRef.current) {
-      console.log('Category settings changed, reprocessing categories');
       processCategories(preserveSelectionsRef.current);
     }
   }, [isOpen, categorySettings, processCategories]);
@@ -200,10 +198,6 @@ export const useCategoryManagement = ({
     if (!isOpen) return;
     
     if (currentBook.audiobookData && rawCategories.length > 0 && !hasProcessedAudiobookRef.current) {
-      // Only log if audiobook has genres that might affect category processing
-      if (currentBook.audiobookData.hasAudiobook && currentBook.audiobookData.genres && currentBook.audiobookData.genres.length > 0) {
-        console.log(`Reprocessing categories with ${currentBook.audiobookData.genres.length} audiobook genres`);
-      }
       processCategories(preserveSelectionsRef.current);
       hasProcessedAudiobookRef.current = true;
     }
@@ -242,11 +236,8 @@ export const useCategoryManagement = ({
     setSelectedCategories(prev => prev.filter(cat => cat !== category.processed));
     
     CategoryService.addIgnoredCategory(category.original);
-    const updatedSettings = CategoryService.loadSettings();
-    setCategorySettings(updatedSettings);
-    
-    // Immediately reprocess categories with the updated settings to show visual changes
-    processCategories(true, updatedSettings);
+    // Settings will be updated via storage event listener
+    // Reprocess will happen automatically when settings change
     
     preserveSelectionsRef.current = true; // Preserve selections after ignoring
     toast.success(`"${category.original}" will always be ignored`);
@@ -254,11 +245,8 @@ export const useCategoryManagement = ({
 
   const handleUnignoreCategory = (category: ProcessedCategory) => {
     CategoryService.removeIgnoredCategory(category.original);
-    const updatedSettings = CategoryService.loadSettings();
-    setCategorySettings(updatedSettings);
-    
-    // Immediately reprocess categories with the updated settings to show visual changes
-    processCategories(true, updatedSettings);
+    // Settings will be updated via storage event listener
+    // Reprocess will happen automatically when settings change
     
     preserveSelectionsRef.current = true; // Preserve selections after unignoring
     toast.success(`"${category.original}" is no longer ignored`);
@@ -266,11 +254,8 @@ export const useCategoryManagement = ({
 
   const handleMergeCategories = (fromCategory: string, toCategory: string) => {
     CategoryService.addCategoryMapping(fromCategory, toCategory);
-    const updatedSettings = CategoryService.loadSettings();
-    setCategorySettings(updatedSettings);
-    
-    // Immediately reprocess categories with the updated settings to show visual changes
-    processCategories(true, updatedSettings);
+    // Settings will be updated via storage event listener
+    // Reprocess will happen automatically when settings change
     
     preserveSelectionsRef.current = true; // Preserve selections after mapping
     toast.success(`"${fromCategory}" will now map to "${toCategory}"`);
@@ -280,11 +265,8 @@ export const useCategoryManagement = ({
     if (category.mappedFrom) {
       // This category is the result of a mapping, remove the mapping
       CategoryService.removeCategoryMapping(category.mappedFrom);
-      const updatedSettings = CategoryService.loadSettings();
-      setCategorySettings(updatedSettings);
-      
-      // Immediately reprocess categories with the updated settings to show visual changes
-      processCategories(true, updatedSettings);
+      // Settings will be updated via storage event listener
+      // Reprocess will happen automatically when settings change
       
       preserveSelectionsRef.current = true; // Preserve selections after unmapping
       toast.success(`Removed mapping: "${category.mappedFrom}" → "${category.processed}"`);
@@ -292,11 +274,8 @@ export const useCategoryManagement = ({
       // This category might be mapped to other categories, remove all mappings to it
       const removedMappings = CategoryService.removeAllMappingsTo(category.processed);
       if (removedMappings.length > 0) {
-        const updatedSettings = CategoryService.loadSettings();
-        setCategorySettings(updatedSettings);
-        
-        // Immediately reprocess categories with the updated settings to show visual changes
-        processCategories(true, updatedSettings);
+        // Settings will be updated via storage event listener
+        // Reprocess will happen automatically when settings change
         
         preserveSelectionsRef.current = true; // Preserve selections after unmapping
         toast.success(`Removed ${removedMappings.length} mapping(s) to "${category.processed}"`);

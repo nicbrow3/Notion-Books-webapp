@@ -5,6 +5,7 @@ import { CategoryService } from '../../../services/categoryService';
 import { FieldSelections } from '../BookInfoPanel';
 import { extractPlainText } from '../utils/htmlUtils';
 import { toast } from 'react-hot-toast';
+import { API_BASE_URL } from '../../../utils/api';
 
 interface UseBookDataProps {
   book: BookSearchResult;
@@ -74,6 +75,7 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
   const [loadingEditions, setLoadingEditions] = useState(false);
   const [loadingAudiobook, setLoadingAudiobook] = useState(false);
   const [fieldSelections, setFieldSelections] = useState<FieldSelections | null>(null);
+  const editionsRequestCacheRef = useRef<Set<string>>(new Set());
 
   // When the modal is opened with a new book, reset the state
   useEffect(() => {
@@ -165,7 +167,6 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
     
     setFieldSelections(newSelections);
     
-    console.log(`Field selection updated for ${fieldId} to "${value}"`);
     toast.success(`Updated ${fieldId} source`);
   }, [fieldSelections]);
   
@@ -202,7 +203,6 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
         if (shouldSelectAudiobookCover && updatedSelections.thumbnail !== 'audiobook') {
           updatedSelections.thumbnail = 'audiobook';
           needsUpdate = true;
-          console.log('🎵 Auto-selecting audiobook cover.');
         }
       }
 
@@ -228,38 +228,63 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
     }
 
     if (needsUpdate) {
-      console.log('✨ Auto-selection needs update. New selections:', updatedSelections);
       setFieldSelections(updatedSelections);
     }
-  }, [isOpen, currentBook.audiobookData, editions]);
+  }, [isOpen, currentBook.audiobookData]);
 
   const fetchAllEditionsCategories = useCallback(async () => {
     if (!currentBook.openLibraryKey) return;
 
+    const cleanWorkKey = currentBook.openLibraryKey.replace('/works/', '');
+
+    let englishOnly = true;
+    if (notionSettings && notionSettings.useEnglishOnlySources === false) {
+      englishOnly = false;
+    }
+
+    const normalizedTitle = (currentBook.title || '').trim();
+    const requestKey = `${cleanWorkKey}|${englishOnly ? 'en' : 'all'}|${normalizedTitle}`;
+
+    if (editionsRequestCacheRef.current.has(requestKey)) {
+      return;
+    }
+
+    editionsRequestCacheRef.current.add(requestKey);
+
     setLoadingEditions(true);
     try {
-      const cleanWorkKey = currentBook.openLibraryKey.replace('/works/', '');
-      
-      let englishOnly = true;
-      if (notionSettings && notionSettings.useEnglishOnlySources === false) {
-        englishOnly = false;
-      }
-      
-      let url = `/api/books/editions/${cleanWorkKey}`;
+      let url = `${API_BASE_URL}/api/books/editions/${cleanWorkKey}`;
       const queryParams = new URLSearchParams();
       if (englishOnly) {
         queryParams.append('englishOnly', 'true');
-        if (currentBook.title) {
-          queryParams.append('originalTitle', encodeURIComponent(currentBook.title));
+        if (normalizedTitle) {
+          queryParams.append('originalTitle', normalizedTitle);
         }
       }
       const queryString = queryParams.toString();
       if (queryString) {
         url += `?${queryString}`;
       }
-      
-      console.log(`Fetching ${englishOnly ? 'English-only' : 'all'} editions for "${currentBook.title}"`);
-      const response = await fetch(url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        if (response.status === 404) {
+          console.warn(`Editions endpoint returned 404 for ${url}. Treating as no editions.`);
+          setEditions([]);
+          return;
+        }
+
+        throw new Error(`Edition request failed (${response.status} ${response.statusText}): ${responseText}`);
+      }
+
       const result: BookEditionsResponse = await response.json();
       
       if (result.success && result.data) {
@@ -334,15 +359,19 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
 
         if (hasEnhancements) {
           setCurrentBook(enhancedBook);
-          console.log(`Enhanced book data with information from ${result.data.editions.length} editions and audiobook data`);
         }
       }
     } catch (error) {
       console.error('Error fetching editions:', error);
+      editionsRequestCacheRef.current.delete(requestKey);
     } finally {
       setLoadingEditions(false);
     }
-  }, [currentBook.openLibraryKey, currentBook.title, currentBook.audiobookData?.description, currentBook.audiobookData?.hasAudiobook, notionSettings?.useEnglishOnlySources]);
+  }, [currentBook.openLibraryKey, currentBook.title, notionSettings?.useEnglishOnlySources]);
+
+  useEffect(() => {
+    editionsRequestCacheRef.current.clear();
+  }, [book.id, book.openLibraryKey]);
 
   // Fetch audiobook data
   const fetchAudiobookData = useCallback(async () => {
@@ -381,14 +410,12 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
           
           if (shouldUseAudiobookDate) {
             bookWithAudiobook.audiobookData.isEarlierDate = true;
-            console.log(`Audiobook date (${cleanedAudiobookDate}) is earlier than other dates - marking as preferred date`);
           }
         }
       }
       
       setCurrentBook(bookWithAudiobook);
       if (bookWithAudiobook.audiobookData?.hasAudiobook) {
-        // console.log(`Audiobook data loaded for: "${currentBook.title}"`);
       }
     } catch (error) {
       console.error('❌ Failed to fetch audiobook data:', error);

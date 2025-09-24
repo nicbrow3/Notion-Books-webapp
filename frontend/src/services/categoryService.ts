@@ -412,9 +412,6 @@ export class CategoryService {
         .map((genre: any) => typeof genre === 'string' ? genre : (genre as any)?.name)
         .filter(Boolean) as string[];
         
-      if (cleanAudiobookGenres.length > 0) {
-        console.log(`Processing categories with audiobook genre splitting (${cleanAudiobookGenres.length} genres)`);
-      }
       // Use the audiobook-aware splitting method, but ensure compound genres still get split
       splitCategories = this.splitCategoriesWithAudiobookPreservation(categories, cleanAudiobookGenres, { splitCommas: settings.splitCommas !== false, splitAmpersand: settings.splitAmpersand !== false, splitSlashes: settings.splitSlashes !== false });
     } else {

@@ -206,10 +206,8 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
 
     try {
       setIsLoadingProperties(true);
-      console.log('🔧 NotionSettingsContext: Loading database properties for:', databaseId);
       const properties = await NotionService.getDatabaseProperties(databaseId);
       setDatabaseProperties(properties);
-      console.log('🔧 NotionSettingsContext: Database properties loaded');
     } catch (error) {
       console.error('🔧 NotionSettingsContext: Failed to load database properties:', error);
       toast.error('Failed to load database properties');

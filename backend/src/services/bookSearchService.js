@@ -828,10 +828,26 @@ class BookSearchService {
       if (englishOnly) logMessage += ` (English-only, original title: "${originalTitle}")`;
       console.log(logMessage);
 
-      const response = await axios.get(`https://openlibrary.org${workKey}/editions.json`, {
-        params: { limit: englishOnly ? limit * 3 : limit * 2, offset: 0 }, // Fetch more if filtering heavily
-        timeout: 8000
-      });
+      let response;
+      try {
+        response = await axios.get(`https://openlibrary.org${workKey}/editions.json`, {
+          params: { limit: englishOnly ? limit * 3 : limit * 2, offset: 0 }, // Fetch more if filtering heavily
+          timeout: 8000
+        });
+      } catch (error) {
+        const status = error?.response?.status;
+        if (status === 404) {
+          console.warn(`📚 Open Library returned 404 for editions of ${workKey}. Treating as no editions.`);
+          return {
+            success: true,
+            totalEditions: 0,
+            editions: [],
+            workKey,
+            message: 'Open Library reported no editions for this work.'
+          };
+        }
+        throw error;
+      }
 
       if (!response.data?.entries?.length) {
         return { success: true, totalEditions: 0, editions: [], message: 'No editions found' };

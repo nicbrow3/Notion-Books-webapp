@@ -4,6 +4,24 @@ import { BookSearchResult } from '../../../types/book';
 import { NotionService } from '../../../services/notionService';
 import { CreateNotionPageRequest } from '../../../types/notion';
 
+const areMappingsEqual = (a: any, b: any) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+
+  if (aKeys.length !== bKeys.length) return false;
+
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 interface UseNotionIntegrationProps {
   isOpen: boolean;
   isNotionConnected: boolean;
@@ -68,35 +86,67 @@ export const useNotionIntegration = ({
   const [tempFieldMappings, setTempFieldMappings] = useState<any>(null);
   const [databaseProperties, setDatabaseProperties] = useState<any>(null);
   const [loadingDatabaseProperties, setLoadingDatabaseProperties] = useState(false);
-  
+  const lastLoadedDatabaseIdRef = useRef<string | null>(null);
+
   const duplicateCheckButtonRef = useRef<HTMLButtonElement>(null);
   const hasAutoChecked = useRef(false);
 
   // Initialize temp field mappings when modal opens or settings change
   useEffect(() => {
-    if (isOpen && notionSettings?.fieldMapping) {
-      console.log('Initializing temp field mappings from settings');
-      setTempFieldMappings({ ...notionSettings.fieldMapping });
-      
-      // Load database properties if not already loaded
-      if (notionSettings.databaseId && !databaseProperties && !loadingDatabaseProperties) {
-        setLoadingDatabaseProperties(true);
-        NotionService.getDatabaseProperties(notionSettings.databaseId)
-          .then(properties => {
-            setDatabaseProperties(properties);
-          })
-          .catch(error => {
-            console.error('🔧 Failed to load database properties:', error);
-            toast.error('Failed to load database properties for field mapping');
-          })
-          .finally(() => {
-            setLoadingDatabaseProperties(false);
-          });
+    if (!isOpen || !notionSettings?.fieldMapping) return;
+
+    const nextMapping = notionSettings.fieldMapping;
+
+    setTempFieldMappings((prev: any) => {
+      if (prev && areMappingsEqual(prev, nextMapping)) {
+        return prev;
       }
+
+      return { ...nextMapping };
+    });
+  }, [isOpen, notionSettings?.fieldMapping]);
+
+  // Load database properties for the selected database when needed
+  useEffect(() => {
+    if (!isOpen) {
+      setLoadingDatabaseProperties(false);
+      return;
     }
-  }, [isOpen, notionSettings?.fieldMapping, notionSettings?.databaseId, databaseProperties, loadingDatabaseProperties, tempFieldMappings]);
 
+    if (!notionSettings?.databaseId) {
+      lastLoadedDatabaseIdRef.current = null;
+      setDatabaseProperties(null);
+      setLoadingDatabaseProperties(false);
+      return;
+    }
 
+    if (lastLoadedDatabaseIdRef.current === notionSettings.databaseId) {
+      return;
+    }
+
+    let isActive = true;
+    setLoadingDatabaseProperties(true);
+
+    NotionService.getDatabaseProperties(notionSettings.databaseId)
+      .then((properties) => {
+        if (!isActive) return;
+        setDatabaseProperties(properties);
+        lastLoadedDatabaseIdRef.current = notionSettings.databaseId;
+      })
+      .catch((error) => {
+        if (!isActive) return;
+        console.error('🔧 Failed to load database properties:', error);
+        toast.error('Failed to load database properties for field mapping');
+      })
+      .finally(() => {
+        if (!isActive) return;
+        setLoadingDatabaseProperties(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [isOpen, notionSettings?.databaseId]);
 
   // Reset auto-check flag when modal closes
   useEffect(() => {
@@ -187,12 +237,6 @@ export const useNotionIntegration = ({
       audiobookPublishedDate: finalBookData.audiobookData?.publishedDate
     };
 
-    console.log('Creating Notion request with finalBookData:', {
-      title: finalBookData.title,
-      publishedDate: finalBookData.publishedDate,
-      originalPublishedDate: finalBookData.originalPublishedDate,
-      audiobookPublishedDate: finalBookData.audiobookData?.publishedDate
-    });
 
     return {
       databaseId: notionSettings!.databaseId,

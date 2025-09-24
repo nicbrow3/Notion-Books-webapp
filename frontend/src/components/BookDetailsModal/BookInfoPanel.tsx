@@ -105,7 +105,6 @@ const ThumbnailSelector: React.FC<ThumbnailSelectorProps> = ({
     // If user just enabled the preference and we have an audiobook cover, switch to it immediately
     if (newValue && book.audiobookData?.hasAudiobook && book.audiobookData.image && selectedValue !== 'audiobook') {
       onSelect('audiobook');
-      console.log('🎵 Immediately switched to audiobook cover due to preference checkbox');
     }
   };
 
@@ -321,7 +320,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
 
   // Helper function to find the earliest date among all available sources
   const findEarliestDateSource = () => {
-    console.log('📅 findEarliestDateSource called');
     const dateSources: Array<{
       value: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
       label: string;
@@ -411,11 +409,9 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     });
 
     if (dateSources.length === 0) {
-      console.log('📅 No date sources found for smart selection');
       return null;
     }
 
-    console.log('📅 Found date sources for smart selection:', dateSources.map(d => ({ label: d.label, year: d.year })));
 
     // Sort by year (earliest first)
     dateSources.sort((a, b) => a.year - b.year);
@@ -423,19 +419,15 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     const earliest = dateSources[0];
     const latest = dateSources[dateSources.length - 1];
     
-    console.log('📅 Earliest source:', earliest.label, earliest.year);
-    console.log('📅 Latest source:', latest.label, latest.year);
 
     // If the earliest date is more than a year prior to the latest, use the earliest
     if (latest.year - earliest.year > 1) {
-      console.log(`📅 Using earliest date (${earliest.year}) as default because it's more than a year prior to latest (${latest.year})`);
       return earliest.value;
     }
 
     // If dates are within the same year or close, prefer audiobook if available
     const audiobookSource = dateSources.find(source => source.value === 'audiobook');
     if (audiobookSource && latest.year - earliest.year <= 1) {
-      console.log(`📅 Using audiobook date as default because dates are within the same year range`);
       return 'audiobook';
     }
 
@@ -658,13 +650,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
 
   // Get available release date sources
   const getReleaseDateSources = () => {
-    console.log('📅 getReleaseDateSources called with book data:', {
-      copyright: book.copyright,
-      audiobookCopyright: book.audiobookData?.copyright,
-      originalPublishedDate: book.originalPublishedDate,
-      publishedDate: book.publishedDate,
-      audiobookPublishedDate: book.audiobookData?.publishedDate
-    });
     
     const sources: Array<{value: 'published' | 'original' | 'audiobook' | 'first_published' | 'copyright' | 'audiobook_copyright' | number, label: string, content: string}> = [];
     
@@ -678,7 +663,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     
     // Copyright date (often the earliest/most accurate)
     if (book.copyright && typeof book.copyright === 'string') {
-      console.log('📅 Adding book copyright source:', book.copyright);
       potentialSources.push({
         value: 'copyright',
         label: 'Copyright',
@@ -688,15 +672,8 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     }
     
     // Audiobook copyright date
-    console.log('📅 Checking audiobook copyright conditions:', {
-      hasAudiobook: book.audiobookData?.hasAudiobook,
-      hasCopyright: !!book.audiobookData?.copyright,
-      copyrightValue: book.audiobookData?.copyright,
-      copyrightType: typeof book.audiobookData?.copyright
-    });
     
     if (book.audiobookData?.hasAudiobook && book.audiobookData.copyright && typeof book.audiobookData.copyright === 'string') {
-      console.log('📅 Adding audiobook copyright source:', book.audiobookData.copyright);
       potentialSources.push({
         value: 'audiobook_copyright',
         label: 'Audiobook Copyright',
@@ -705,7 +682,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       });
     } else if (book.audiobookData?.hasAudiobook && book.audiobookData.copyright) {
       // Handle case where copyright might be a number instead of string
-      console.log('📅 Audiobook copyright exists but is not a string, converting:', book.audiobookData.copyright);
       const copyrightStr = String(book.audiobookData.copyright);
       potentialSources.push({
         value: 'audiobook_copyright',
@@ -772,7 +748,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       }
     });
 
-    console.log('📅 Potential sources before filtering:', potentialSources.map(s => ({ label: s.label, content: s.content, isYearOnly: s.isYearOnly })));
     
     // Smart filtering: only remove year-only dates if they're close to specific dates
     // Always keep year-only dates that are significantly earlier (more than 2 years)
@@ -784,16 +759,13 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     if (specificDates.length > 0 && yearOnlyDates.length > 0) {
       // Get the earliest year from specific dates
       const earliestSpecificYear = Math.min(...specificDates.map(source => extractYear(source.content) || 9999));
-      console.log('📅 Earliest specific date year:', earliestSpecificYear);
       
       // Keep year-only dates that are significantly earlier (more than 2 years) or if no specific date year found
       yearOnlyDates.forEach(source => {
         const year = extractYear(source.content);
         if (year && (earliestSpecificYear === 9999 || year < earliestSpecificYear - 2)) {
-          console.log(`📅 Keeping year-only date ${year} because it's significantly earlier than ${earliestSpecificYear}`);
           filteredSources.push(source);
         } else {
-          console.log(`📅 Filtering out year-only date ${year} because it's too close to specific dates`);
         }
       });
     } else {
@@ -801,7 +773,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       filteredSources = potentialSources;
     }
       
-    console.log('📅 Filtered sources:', filteredSources.map(s => ({ label: s.label, content: s.content, isYearOnly: s.isYearOnly })));
 
     // Convert to final format
     filteredSources.forEach(source => {
@@ -812,7 +783,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
       });
     });
 
-    console.log('📅 Final releasedate sources:', sources.map(s => ({ label: s.label, content: s.content })));
     return sources;
   };
 
