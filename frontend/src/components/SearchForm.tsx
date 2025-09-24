@@ -15,6 +15,7 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const [hasSearched, setHasSearched] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -76,7 +77,7 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      setShowSuggestions(false);
+      setHasSearched(true);
       onSearch({
         query: query.trim(),
         type: searchType,
@@ -103,13 +104,13 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedSuggestionIndex(prev => 
+        setSelectedSuggestionIndex(prev =>
           prev < suggestions.length - 1 ? prev + 1 : 0
         );
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedSuggestionIndex(prev => 
+        setSelectedSuggestionIndex(prev =>
           prev > 0 ? prev - 1 : suggestions.length - 1
         );
         break;
@@ -117,6 +118,9 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
         if (selectedSuggestionIndex >= 0) {
           e.preventDefault();
           handleSuggestionClick(suggestions[selectedSuggestionIndex]);
+        } else {
+          // User pressed Enter without selecting a suggestion
+          setHasSearched(true);
         }
         break;
       case 'Escape':
@@ -129,6 +133,7 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
     setSelectedSuggestionIndex(-1);
+    setHasSearched(false); // Reset the searched flag when user starts typing again
   };
 
   const handleInputFocus = () => {
@@ -227,7 +232,7 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
           </div>
 
           {/* Suggestions Dropdown */}
-          {showSuggestions && suggestions.length > 0 && (
+          {showSuggestions && suggestions.length > 0 && !hasSearched && (
             <div
               ref={suggestionsRef}
               className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
