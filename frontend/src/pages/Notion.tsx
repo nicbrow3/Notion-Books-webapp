@@ -127,7 +127,7 @@ const Notion: React.FC = () => {
 
   const renderSearchSection = () => {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Search Form */}
         <motion.div
           className="bg-white rounded-lg shadow-md p-6 border border-gray-200"
@@ -367,8 +367,8 @@ const Notion: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto">
-      <motion.div 
-        className="mb-8 flex items-start justify-between"
+      <motion.div
+        className="mb-4 flex items-start justify-between"
         initial={{ opacity: 0, y: -30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
@@ -393,7 +393,7 @@ const Notion: React.FC = () => {
         </motion.div>
       </motion.div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {renderSearchSection()}
       </div>
 
