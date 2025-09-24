@@ -294,12 +294,12 @@ const FieldSourceSelectionModal = <T extends string | number>({
                               : ''
                           }`}
                           initial={{ opacity: 0, y: 10 }}
-                          animate={{ 
-                            opacity: 1, 
+                          animate={{
+                            opacity: 1,
                             y: 0,
-                            backgroundColor: isSelected ? '#dbeafe' : 'transparent'
+                            backgroundColor: isSelected ? '#dbeafe' : 'rgba(255, 255, 255, 0)'
                           }}
-                          whileHover={{ 
+                          whileHover={{
                             backgroundColor: isSelected ? '#bfdbfe' : '#f9fafb'
                           }}
                           transition={{ 
