@@ -163,8 +163,7 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
         {/* Search Type Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -317,7 +316,6 @@ const SearchForm: React.FC<SearchFormProps> = ({ onSearch, isLoading = false }) 
           Search Books
         </button>
       </form>
-    </div>
   );
 };
 
