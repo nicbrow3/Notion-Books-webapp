@@ -172,7 +172,7 @@ const notionRequest = async (token, method, endpoint, data = null) => {
     url: `https://api.notion.com/v1${endpoint}`,
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Notion-Version': '2022-06-28',
+      'Notion-Version': '2025-09-03',
       'Content-Type': 'application/json'
     }
   };
@@ -190,100 +190,318 @@ const notionRequest = async (token, method, endpoint, data = null) => {
   }
 };
 
-// Get list of user's databases
+// Helper function to discover data sources for a database
+const getDataSourcesForDatabase = async (token, databaseId) => {
+  try {
+    // First, get the database to find its data sources
+    const database = await notionRequest(token, 'GET', `/databases/${databaseId}`);
+
+    // Extract data sources from the database response
+    const dataSources = database.data_sources || [];
+
+    // For each data source, get its detailed properties
+    const dataSourcesWithDetails = await Promise.all(
+      dataSources.map(async (ds) => {
+        try {
+          const dataSourceDetails = await notionRequest(token, 'GET', `/data_sources/${ds.id}`);
+          return {
+            id: ds.id,
+            name: ds.name || dataSourceDetails.title?.[0]?.plain_text || 'Untitled',
+            database_id: databaseId,
+            database_parent: dataSourceDetails.database_parent,
+            properties: Object.keys(dataSourceDetails.properties || {}),
+            created_time: dataSourceDetails.created_time,
+            last_edited_time: dataSourceDetails.last_edited_time
+          };
+        } catch (error) {
+          console.warn(`Failed to fetch details for data source ${ds.id}:`, error.message);
+          return {
+            id: ds.id,
+            name: ds.name || 'Untitled',
+            database_id: databaseId,
+            properties: [],
+            created_time: null,
+            last_edited_time: null
+          };
+        }
+      })
+    );
+
+    return dataSourcesWithDetails;
+  } catch (error) {
+    console.error(`Error getting data sources for database ${databaseId}:`, error.message);
+    return [];
+  }
+};
+
+// Get list of user's databases and their data sources
 router.get('/databases', requireAuth, async (req, res) => {
   try {
     const token = await getNotionToken(req);
-    
-    const response = await notionRequest(token, 'POST', '/search', {
-      filter: {
-        value: 'database',
-        property: 'object'
-      },
-      sort: {
-        direction: 'descending',
-        timestamp: 'last_edited_time'
-      }
-    });
 
-    const databases = response.results.map(db => ({
-      id: db.id,
-      title: db.title?.[0]?.plain_text || 'Untitled',
-      url: db.url,
-      created_time: db.created_time,
-      last_edited_time: db.last_edited_time,
-      properties: Object.keys(db.properties || {})
+    // First, search for databases (not data sources) to get the parent databases
+    console.log('Searching for databases with 2025-09-03 API...');
+    let databasesResponse;
+    try {
+      databasesResponse = await notionRequest(token, 'POST', '/search', {
+        filter: {
+          value: 'database',
+          property: 'object'
+        },
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time'
+        }
+      });
+      console.log('Found', databasesResponse.results?.length, 'databases');
+    } catch (searchError) {
+      console.log('Database search with new API failed, trying fallback approach:', searchError.response?.data);
+      // Fallback: search without specific filter (get all objects and filter client-side)
+      try {
+        const allResults = await notionRequest(token, 'POST', '/search', {
+          sort: {
+            direction: 'descending',
+            timestamp: 'last_edited_time'
+          }
+        });
+        databasesResponse = {
+          results: allResults.results.filter(item => item.object === 'database')
+        };
+        console.log('Fallback search found', databasesResponse.results?.length, 'databases');
+      } catch (fallbackError) {
+        console.error('Both database search approaches failed:', fallbackError.response?.data);
+        throw fallbackError;
+      }
+    }
+
+    // For each database, get its data sources
+    const databasesWithDataSources = await Promise.all(
+      databasesResponse.results.map(async (db) => {
+        const dataSources = await getDataSourcesForDatabase(token, db.id);
+
+        return {
+          id: db.id,
+          title: db.title?.[0]?.plain_text || 'Untitled',
+          url: db.url,
+          created_time: db.created_time,
+          last_edited_time: db.last_edited_time,
+          data_sources: dataSources,
+          // For backward compatibility, include the first data source's properties
+          properties: dataSources.length > 0 ? dataSources[0].properties : []
+        };
+      })
+    );
+
+    // Also search for data sources directly for compatibility
+    console.log('Searching for data sources with 2025-09-03 API...');
+    let dataSourcesResponse;
+    try {
+      dataSourcesResponse = await notionRequest(token, 'POST', '/search', {
+        filter: {
+          value: 'data_source',
+          property: 'object'
+        },
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time'
+        }
+      });
+      console.log('Found', dataSourcesResponse.results?.length, 'data sources');
+    } catch (searchError) {
+      console.log('Data source search with new API failed, trying fallback:', searchError.response?.data);
+      // Fallback: search all objects and filter for data sources
+      try {
+        const allResults = await notionRequest(token, 'POST', '/search', {
+          sort: {
+            direction: 'descending',
+            timestamp: 'last_edited_time'
+          }
+        });
+        dataSourcesResponse = {
+          results: allResults.results.filter(item => item.object === 'data_source')
+        };
+        console.log('Fallback search found', dataSourcesResponse.results?.length, 'data sources');
+      } catch (fallbackError) {
+        console.log('Data source search failed completely, continuing without standalone data sources');
+        dataSourcesResponse = { results: [] };
+      }
+    }
+
+    // Format data sources as databases for frontend compatibility
+    const standaloneDataSources = dataSourcesResponse.results.map(ds => ({
+      id: ds.id,
+      title: ds.title?.[0]?.plain_text || 'Untitled',
+      url: ds.url,
+      created_time: ds.created_time,
+      last_edited_time: ds.last_edited_time,
+      data_sources: [{
+        id: ds.id,
+        name: ds.title?.[0]?.plain_text || 'Untitled',
+        properties: Object.keys(ds.properties || {})
+      }],
+      properties: Object.keys(ds.properties || {}),
+      is_data_source: true // Flag to identify these as standalone data sources
     }));
 
-    res.json({ databases });
+    // Combine databases with their data sources and standalone data sources
+    const allDatabases = [...databasesWithDataSources, ...standaloneDataSources];
+
+    res.json({ databases: allDatabases });
 
   } catch (error) {
-    console.error('Error fetching databases:', error);
-    
+    console.error('Error fetching databases:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      stack: error.stack
+    });
+
     if (error.response?.status === 401) {
       return res.status(401).json({ error: 'Notion access token invalid or expired' });
     }
-    
-    res.status(500).json({ error: 'Failed to fetch databases' });
+
+    // Return more detailed error information for debugging
+    res.status(500).json({
+      error: 'Failed to fetch databases',
+      details: error.response?.data || error.message,
+      status: error.response?.status
+    });
   }
 });
 
-// Get database schema/properties
+// Get database schema/properties - now supports both databases and data sources
 router.get('/database/:databaseId/properties', requireAuth, async (req, res) => {
   try {
     const { databaseId } = req.params;
     const token = await getNotionToken(req);
-    
-    const database = await notionRequest(token, 'GET', `/databases/${databaseId}`);
-    
-    const properties = Object.entries(database.properties || {}).map(([name, prop]) => ({
-      name,
-      type: prop.type,
-      id: prop.id,
-      config: prop[prop.type] || {}
-    }));
+    const { data_source_id } = req.query; // Optional: specific data source ID
+
+    let database, properties, dataSourceId, title;
+
+    try {
+      // Try to get as database first
+      database = await notionRequest(token, 'GET', `/databases/${databaseId}`);
+
+      if (data_source_id) {
+        // User specified a specific data source
+        const dataSource = await notionRequest(token, 'GET', `/data_sources/${data_source_id}`);
+        properties = Object.entries(dataSource.properties || {}).map(([name, prop]) => ({
+          name,
+          type: prop.type,
+          id: prop.id,
+          config: prop[prop.type] || {}
+        }));
+        dataSourceId = data_source_id;
+        title = dataSource.title?.[0]?.plain_text || 'Untitled';
+      } else if (database.data_sources && database.data_sources.length > 0) {
+        // Get the first data source (for compatibility)
+        const firstDataSourceId = database.data_sources[0].id;
+        const dataSource = await notionRequest(token, 'GET', `/data_sources/${firstDataSourceId}`);
+        properties = Object.entries(dataSource.properties || {}).map(([name, prop]) => ({
+          name,
+          type: prop.type,
+          id: prop.id,
+          config: prop[prop.type] || {}
+        }));
+        dataSourceId = firstDataSourceId;
+        title = database.title?.[0]?.plain_text || 'Untitled';
+      } else {
+        // Fallback to database properties (older databases without data sources)
+        properties = Object.entries(database.properties || {}).map(([name, prop]) => ({
+          name,
+          type: prop.type,
+          id: prop.id,
+          config: prop[prop.type] || {}
+        }));
+        title = database.title?.[0]?.plain_text || 'Untitled';
+      }
+    } catch (dbError) {
+      // If database fetch failed, try as data source directly
+      try {
+        const dataSource = await notionRequest(token, 'GET', `/data_sources/${databaseId}`);
+        properties = Object.entries(dataSource.properties || {}).map(([name, prop]) => ({
+          name,
+          type: prop.type,
+          id: prop.id,
+          config: prop[prop.type] || {}
+        }));
+        dataSourceId = databaseId;
+        title = dataSource.title?.[0]?.plain_text || 'Untitled';
+      } catch (dsError) {
+        throw dbError; // Throw the original database error
+      }
+    }
 
     // Generate suggested field mappings
     const suggestedMappings = generateFieldMappings(properties);
 
     res.json({
-      id: database.id,
-      title: database.title?.[0]?.plain_text || 'Untitled',
+      id: database?.id || databaseId,
+      data_source_id: dataSourceId,
+      title,
       properties,
       suggestedMappings,
-      url: database.url
+      url: database?.url,
+      data_sources: database?.data_sources || []
     });
 
   } catch (error) {
     console.error('Error fetching database properties:', error);
-    
+
     if (error.response?.status === 404) {
       return res.status(404).json({ error: 'Database not found or access denied' });
     }
-    
+
     if (error.response?.status === 401) {
       return res.status(401).json({ error: 'Notion access token invalid or expired' });
     }
-    
+
     res.status(500).json({ error: 'Failed to fetch database properties' });
   }
 });
 
+// Helper function to resolve data source ID from database ID
+const resolveDataSourceId = async (token, databaseId, dataSourceId = null) => {
+  if (dataSourceId) {
+    return dataSourceId;
+  }
+
+  try {
+    // Try to get database and find its first data source
+    const database = await notionRequest(token, 'GET', `/databases/${databaseId}`);
+    if (database.data_sources && database.data_sources.length > 0) {
+      console.log(`Found ${database.data_sources.length} data sources for database ${databaseId}`);
+      return database.data_sources[0].id;
+    }
+    // If no data sources, use database ID (for backward compatibility with old databases)
+    console.log(`No data sources found for database ${databaseId}, using database ID for backward compatibility`);
+    return databaseId;
+  } catch (error) {
+    // If database fetch fails, assume the ID is already a data source ID
+    console.log(`Failed to fetch database ${databaseId}, assuming it's already a data source ID:`, error.message);
+    return databaseId;
+  }
+};
+
 // Create a new page in a Notion database
 router.post('/pages', requireAuth, async (req, res) => {
   try {
-    const { databaseId, properties, children } = req.body;
-    
+    const { databaseId, dataSourceId, properties, children } = req.body;
+
     if (!databaseId || !properties) {
       return res.status(400).json({ error: 'Database ID and properties are required' });
     }
 
     const token = await getNotionToken(req);
-    
-    const pageData = {
+
+    // Resolve the correct data source ID
+    const resolvedDataSourceId = await resolveDataSourceId(token, databaseId, dataSourceId);
+
+    let pageData = {
       parent: {
-        type: 'database_id',
-        database_id: databaseId
+        type: 'data_source_id',
+        data_source_id: resolvedDataSourceId
       },
       properties
     };
@@ -292,8 +510,29 @@ router.post('/pages', requireAuth, async (req, res) => {
       pageData.children = children;
     }
 
-    const response = await notionRequest(token, 'POST', '/pages', pageData);
-    
+    console.log('Creating page with data source parent:', {
+      original_database_id: databaseId,
+      resolved_data_source_id: resolvedDataSourceId,
+      parent: pageData.parent
+    });
+
+    let response;
+    try {
+      response = await notionRequest(token, 'POST', '/pages', pageData);
+    } catch (error) {
+      // If data source approach fails, fall back to database approach for backward compatibility
+      if (error.response?.status === 400 && resolvedDataSourceId !== databaseId) {
+        console.log('Data source approach failed, trying database approach for backward compatibility');
+        pageData.parent = {
+          type: 'database_id',
+          database_id: databaseId
+        };
+        response = await notionRequest(token, 'POST', '/pages', pageData);
+      } else {
+        throw error;
+      }
+    }
+
     res.json({
       id: response.id,
       url: response.url,
@@ -303,18 +542,18 @@ router.post('/pages', requireAuth, async (req, res) => {
 
   } catch (error) {
     console.error('Error creating Notion page:', error);
-    
+
     if (error.response?.status === 400) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid page data',
         details: error.response.data
       });
     }
-    
+
     if (error.response?.status === 401) {
       return res.status(401).json({ error: 'Notion access token invalid or expired' });
     }
-    
+
     res.status(500).json({ error: 'Failed to create Notion page' });
   }
 });
@@ -392,20 +631,28 @@ router.get('/pages/:pageId', requireAuth, async (req, res) => {
 const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId, token) => {
   const properties = {};
 
-  // Get database schema to understand property types
-  let databaseSchema = null;
+  // Get data source schema to understand property types
+  let dataSourceSchema = null;
   try {
-    databaseSchema = await notionRequest(token, 'GET', `/databases/${databaseId}`);
-    console.log('Available database properties:', Object.keys(databaseSchema?.properties || {}));
+    // Try to resolve data source ID first
+    const resolvedDataSourceId = await resolveDataSourceId(token, databaseId);
+    try {
+      dataSourceSchema = await notionRequest(token, 'GET', `/data_sources/${resolvedDataSourceId}`);
+      console.log('Available data source properties:', Object.keys(dataSourceSchema?.properties || {}));
+    } catch (dsError) {
+      // Fallback to database for backward compatibility
+      dataSourceSchema = await notionRequest(token, 'GET', `/databases/${databaseId}`);
+      console.log('Available database properties (fallback):', Object.keys(dataSourceSchema?.properties || {}));
+    }
   } catch (error) {
-    console.error('Failed to fetch database schema:', error);
+    console.error('Failed to fetch database/data source schema:', error);
     // Fall back to basic formatting without type checking
   }
 
-  // Helper function to get property type from database schema
+  // Helper function to get property type from data source schema
   const getPropertyType = (propertyName) => {
-    if (!databaseSchema?.properties) return null;
-    const property = databaseSchema.properties[propertyName];
+    if (!dataSourceSchema?.properties) return null;
+    const property = dataSourceSchema.properties[propertyName];
     return property?.type || null;
   };
 
@@ -739,9 +986,9 @@ const formatBookDataForNotion = async (bookData, fieldMappings = {}, databaseId,
 
     const propertyType = getPropertyType(notionPropertyName);
     
-    // Skip if property doesn't exist in the database
-    if (!propertyType && databaseSchema?.properties) {
-      console.warn(`Property "${notionPropertyName}" does not exist in database. Skipping field "${bookField}".`);
+    // Skip if property doesn't exist in the data source
+    if (!propertyType && dataSourceSchema?.properties) {
+      console.warn(`Property "${notionPropertyName}" does not exist in data source. Skipping field "${bookField}".`);
       continue;
     }
 
@@ -794,10 +1041,13 @@ router.post('/pages/book', requireAuth, async (req, res) => {
     // Format book data with proper type checking
     const properties = await formatBookDataForNotion(bookData, fieldMappings, databaseId, token);
     
-    const pageData = {
+    // Resolve the correct data source ID
+    const resolvedDataSourceId = await resolveDataSourceId(token, databaseId, req.body.dataSourceId);
+
+    let pageData = {
       parent: {
-        type: 'database_id',
-        database_id: databaseId
+        type: 'data_source_id',
+        data_source_id: resolvedDataSourceId
       },
       properties
     };
@@ -822,13 +1072,28 @@ router.post('/pages/book', requireAuth, async (req, res) => {
       releaseDateMapping: fieldMappings?.releaseDate, // New consolidated mapping
       allMappingKeys: Object.keys(fieldMappings || {}),
       allMappingValues: Object.values(fieldMappings || {}),
-      problematicMappings: Object.entries(fieldMappings || {}).filter(([key, value]) => 
+      problematicMappings: Object.entries(fieldMappings || {}).filter(([key, value]) =>
         value === 'Published' || (typeof value === 'string' && value.includes('Published'))
       )
     });
     console.log('Creating Notion page with data:', JSON.stringify(pageData, null, 2));
 
-    const response = await notionRequest(token, 'POST', '/pages', pageData);
+    let response;
+    try {
+      response = await notionRequest(token, 'POST', '/pages', pageData);
+    } catch (error) {
+      // If data source approach fails, fall back to database approach for backward compatibility
+      if (error.response?.status === 400 && resolvedDataSourceId !== databaseId) {
+        console.log('Data source approach failed for book creation, trying database approach for backward compatibility');
+        pageData.parent = {
+          type: 'database_id',
+          database_id: databaseId
+        };
+        response = await notionRequest(token, 'POST', '/pages', pageData);
+      } else {
+        throw error;
+      }
+    }
     
     res.json({
       id: response.id,
@@ -933,9 +1198,16 @@ router.post('/database/:databaseId/search', requireAuth, async (req, res) => {
     // Use field mappings directly (no need to parse since it's already an object)
     const mappings = fieldMappings || {};
 
-    // Get database properties to find available fields
-    const database = await notionRequest(token, 'GET', `/databases/${databaseId}`);
-    const availableProperties = Object.keys(database.properties || {});
+    // Get data source properties to find available fields
+    const resolvedDataSourceId = await resolveDataSourceId(token, databaseId);
+    let dataSource;
+    try {
+      dataSource = await notionRequest(token, 'GET', `/data_sources/${resolvedDataSourceId}`);
+    } catch (error) {
+      // Fallback to database for backward compatibility
+      dataSource = await notionRequest(token, 'GET', `/databases/${databaseId}`);
+    }
+    const availableProperties = Object.keys(dataSource.properties || {});
     
     // Determine which properties to search
     const titleProperty = mappings.title || 'Title';
@@ -947,7 +1219,7 @@ router.post('/database/:databaseId/search', requireAuth, async (req, res) => {
     };
 
     if (isbn && availableProperties.includes(isbnProperty)) {
-      const isbnProp = database.properties[isbnProperty];
+      const isbnProp = dataSource.properties[isbnProperty];
       if (isbnProp.type === 'rich_text') {
         filter.or.push({
           property: isbnProperty,
@@ -966,7 +1238,7 @@ router.post('/database/:databaseId/search', requireAuth, async (req, res) => {
     }
 
     if (title && availableProperties.includes(titleProperty)) {
-      const titleProp = database.properties[titleProperty];
+      const titleProp = dataSource.properties[titleProperty];
       if (titleProp.type === 'title') {
         filter.or.push({
           property: titleProperty,
@@ -993,7 +1265,18 @@ router.post('/database/:databaseId/search', requireAuth, async (req, res) => {
       filter: filter.or.length > 1 ? filter : filter.or[0]
     };
 
-    const response = await notionRequest(token, 'POST', `/databases/${databaseId}/query`, searchData);
+    let response;
+    try {
+      response = await notionRequest(token, 'POST', `/data_sources/${resolvedDataSourceId}/query`, searchData);
+    } catch (error) {
+      // If data source query fails, fall back to database query for backward compatibility
+      if (error.response?.status === 404 && resolvedDataSourceId !== databaseId) {
+        console.log('Data source query failed, trying database query for backward compatibility');
+        response = await notionRequest(token, 'POST', `/databases/${databaseId}/query`, searchData);
+      } else {
+        throw error;
+      }
+    }
     
     const books = response.results.map(page => {
       // Dynamically extract title and ISBN based on available properties

@@ -18,7 +18,7 @@ router.post('/setup', async (req, res) => {
     const userResponse = await axios.get('https://api.notion.com/v1/users/me', {
       headers: {
         'Authorization': `Bearer ${integrationToken}`,
-        'Notion-Version': '2022-06-28',
+        'Notion-Version': '2025-09-03',
       }
     });
 
@@ -34,7 +34,7 @@ router.post('/setup', async (req, res) => {
       const usersResponse = await axios.get('https://api.notion.com/v1/users', {
         headers: {
           'Authorization': `Bearer ${integrationToken}`,
-          'Notion-Version': '2022-06-28',
+          'Notion-Version': '2025-09-03',
         }
       });
       
@@ -106,7 +106,7 @@ router.get('/status', async (req, res) => {
         const userResponse = await axios.get('https://api.notion.com/v1/users/me', {
           headers: {
             'Authorization': `Bearer ${integrationToken}`,
-            'Notion-Version': '2022-06-28',
+            'Notion-Version': '2025-09-03',
           }
         });
 
@@ -122,7 +122,7 @@ router.get('/status', async (req, res) => {
           const usersResponse = await axios.get('https://api.notion.com/v1/users', {
             headers: {
               'Authorization': `Bearer ${integrationToken}`,
-              'Notion-Version': '2022-06-28',
+              'Notion-Version': '2025-09-03',
             }
           });
           

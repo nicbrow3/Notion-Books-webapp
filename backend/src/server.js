@@ -13,7 +13,8 @@ const notionRoutes = require('./routes/notion');
 const userRoutes = require('./routes/user');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+// Default to 3002 to avoid conflicts with other projects
+const PORT = process.env.PORT || 3002;
 
 // Rate limiting - more permissive in development
 const limiter = rateLimit({
@@ -33,38 +34,39 @@ app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for now to avoid conflicts
 }));
 
-// CORS configuration - more flexible for production deployments
+// CORS configuration - allow localhost during development and configurable origins in production
+const isDevelopment = (process.env.NODE_ENV || 'development') !== 'production';
+
 const corsOptions = {
-  origin: function (origin, callback) {
+  origin(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (process.env.NODE_ENV === 'development') {
-      // In development, allow localhost on any port
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // In development we accept any localhost or loopback origin to simplify setup
+    if (isDevelopment) {
       if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
         return callback(null, true);
       }
-    } else {
-      // In production, be more permissive for Docker deployments
-      const allowedOrigins = [
-        process.env.FRONTEND_URL,
-        `http://localhost:${process.env.PORT || 3001}`,
-        `https://localhost:${process.env.PORT || 3001}`,
-        // Allow any origin on the same port (for Docker IP-based access)
-        ...(origin.includes(`:${process.env.PORT || 3001}`) ? [origin] : []),
-        // Allow common Docker bridge network IPs
-        ...(origin.match(/^https?:\/\/(192\.168\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|10\.)/i) ? [origin] : []),
-        // Allow any localhost variants
-        ...(origin.includes('localhost') || origin.includes('127.0.0.1') ? [origin] : [])
-      ];
-      
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
     }
-    
-    // If we get here, the origin is not allowed
-    callback(new Error('Not allowed by CORS'));
+
+    // Production whitelist (supports Docker and LAN deployments)
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      `http://localhost:${process.env.PORT || 3002}`,
+      `https://localhost:${process.env.PORT || 3002}`,
+      // Allow common LAN IP ranges
+      ...(origin.match(/^https?:\/\/(192\.168\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|10\.)/i) ? [origin] : []),
+      // Allow any other localhost variants
+      ...(origin.includes('localhost') || origin.includes('127.0.0.1') ? [origin] : [])
+    ].filter(Boolean);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true
 };
