@@ -74,9 +74,17 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
+      <div className="bg-white rounded-lg max-w-md w-full p-6 relative">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <XIcon size={24} weight="light" />
+        </button>
+
         {/* Header */}
-        <div className="text-center mb-6">
+        <div className="text-center mb-6 pr-8">
           <div className="flex justify-center mb-3">{getSuccessIcon()}</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
             {getSuccessTitle()}
@@ -90,12 +98,12 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
         <div className="space-y-3">
           <button
             onClick={() => window.open(notionUrl, '_blank', 'noopener,noreferrer')}
-            className="group w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+            className="group w-full bg-blue-600 text-white py-6 px-6 rounded-lg hover:bg-blue-700 transition-all duration-200 font-semibold text-lg flex items-center justify-center gap-3 hover:scale-105 transform"
           >
-            <ArrowSquareOutIcon 
-              size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
-              weight={ICON_WEIGHTS.FILL} 
-              className="group-hover:animate-wiggle" 
+            <ArrowSquareOutIcon
+              size={ICON_SIZES.MD}
+              weight={ICON_WEIGHTS.FILL}
+              className="group-hover:animate-wiggle"
             />
             View in Notion
           </button>
@@ -104,24 +112,12 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
             onClick={onAddAnotherBook}
             className="group w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
           >
-            <PlusIcon 
-              size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
-              weight={ICON_WEIGHTS.FILL} 
-              className="group-hover:animate-wiggle" 
+            <PlusIcon
+              size={ICON_CONTEXTS.SETTINGS.DEFAULT}
+              weight={ICON_WEIGHTS.FILL}
+              className="group-hover:animate-wiggle"
             />
             Add Another Book
-          </button>
-          
-          <button
-            onClick={onClose}
-            className="group w-full bg-gray-200 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center justify-center gap-2"
-          >
-            <XIcon 
-              size={ICON_CONTEXTS.SETTINGS.DEFAULT} 
-              weight={ICON_WEIGHTS.FILL} 
-              className="group-hover:animate-wiggle" 
-            />
-            Close
           </button>
         </div>
       </div>
