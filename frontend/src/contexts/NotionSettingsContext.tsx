@@ -4,8 +4,13 @@ import { useAuth } from './AuthContext';
 import { NotionService } from '../services/notionService';
 import { NotionDatabase, NotionIntegrationSettings, BookToNotionMapping } from '../types/notion';
 
+type DatabaseWithSources = NotionDatabase & {
+  data_sources?: Array<{ id: string; name?: string; properties?: any; database_id?: string }>;
+  is_data_source?: boolean;
+};
+
 interface NotionSettingsContextType {
-  databases: NotionDatabase[];
+  databases: DatabaseWithSources[];
   selectedDatabase: string;
   databaseProperties: any;
   notionSettings: NotionIntegrationSettings | null;
@@ -44,7 +49,7 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
   const { isAuthenticated } = useAuth();
   
   // Database and settings state
-  const [databases, setDatabases] = useState<NotionDatabase[]>([]);
+  const [databases, setDatabases] = useState<DatabaseWithSources[]>([]);
   const [selectedDatabase, setSelectedDatabase] = useState<string>('');
   const [databaseProperties, setDatabaseProperties] = useState<any>(null);
   const [notionSettings, setNotionSettings] = useState<NotionIntegrationSettings | null>(null);
@@ -81,32 +86,21 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(false);
   const [isLoadingProperties, setIsLoadingProperties] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [hasLoadedDatabases, setHasLoadedDatabases] = useState(false);
 
   // Prevent multiple simultaneous operations
   const loadingSettingsRef = useRef(false);
   const loadingDatabasesRef = useRef(false);
   const hasInitializedRef = useRef(false);
-
-  // Initialize data when authenticated
-  useEffect(() => {
-    if (isAuthenticated && !hasInitializedRef.current) {
-      console.log('🔧 NotionSettingsContext: First initialization');
-      loadSettings();
-      loadDatabases();
-      hasInitializedRef.current = true;
-    } else if (!isAuthenticated) {
-      console.log('🔧 NotionSettingsContext: Not authenticated, resetting state');
-      resetState();
-      hasInitializedRef.current = false;
-    }
-  }, [isAuthenticated]);
-
+  const savedDatabaseIdRef = useRef<string | null>(null);
 
   const resetState = () => {
     setDatabases([]);
     setSelectedDatabase('');
     setDatabaseProperties(null);
     setNotionSettings(null);
+    savedDatabaseIdRef.current = null;
+    setHasLoadedDatabases(false);
     setFieldMappings({
       title: '',
       authors: '',
@@ -131,7 +125,7 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     setUsePageIcon(false);
     setUseEnglishOnlySources(true);
   };
-  const loadDatabases = async () => {
+  const loadDatabases = useCallback(async () => {
     if (loadingDatabasesRef.current) {
       console.log('🔧 NotionSettingsContext: Database loading already in progress, skipping...');
       return;
@@ -140,21 +134,61 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     try {
       loadingDatabasesRef.current = true;
       setIsLoadingDatabases(true);
+      setHasLoadedDatabases(false);
       console.log('🔧 NotionSettingsContext: 🔍 Loading databases...');
       
       const databaseList = await NotionService.getDatabases();
       console.log('🔧 NotionSettingsContext: 📊 Received databases:', databaseList);
-      setDatabases(databaseList);
-      
-      if (databaseList.length === 0) {
+      const extendedDatabaseList = databaseList as DatabaseWithSources[];
+      setDatabases(extendedDatabaseList);
+
+      if (extendedDatabaseList.length === 0) {
         console.log('🔧 NotionSettingsContext: ⚠️ No databases found');
         toast('No databases found. Make sure you have shared at least one database with this integration.', {
           icon: 'ℹ️',
           duration: 5000,
         });
       } else {
-        console.log(`🔧 NotionSettingsContext: ✅ Found ${databaseList.length} databases`);
-        toast.success(`Found ${databaseList.length} database${databaseList.length === 1 ? '' : 's'}`);
+        console.log(`🔧 NotionSettingsContext: ✅ Found ${extendedDatabaseList.length} databases`);
+        toast.success(`Found ${extendedDatabaseList.length} database${extendedDatabaseList.length === 1 ? '' : 's'}`);
+      }
+
+      const savedDatabaseId = savedDatabaseIdRef.current;
+      if (savedDatabaseId) {
+        const hasExactMatch = extendedDatabaseList.some((db) => db.id === savedDatabaseId);
+
+        if (!hasExactMatch) {
+          const legacyMatch = extendedDatabaseList.find((db) =>
+            Array.isArray(db.data_sources) && db.data_sources.some((ds) => ds.id === savedDatabaseId)
+          );
+
+          if (legacyMatch) {
+            const newDatabaseId = legacyMatch.id;
+            console.log('🔧 NotionSettingsContext: Migrating legacy data source ID to database ID', {
+              legacyId: savedDatabaseId,
+              newDatabaseId,
+            });
+
+            savedDatabaseIdRef.current = newDatabaseId;
+            setSelectedDatabase(newDatabaseId);
+
+            try {
+              const existingSettings = notionSettings || await NotionService.getSettings();
+              if (existingSettings) {
+                const updatedSettings: NotionIntegrationSettings = {
+                  ...existingSettings,
+                  databaseId: newDatabaseId,
+                };
+                setNotionSettings(updatedSettings);
+                await NotionService.saveSettings(updatedSettings);
+              }
+            } catch (migrationError) {
+              console.warn('🔧 NotionSettingsContext: Failed to persist migrated database ID', migrationError);
+            }
+          } else {
+            console.warn('🔧 NotionSettingsContext: Saved database ID not found in available databases', savedDatabaseId);
+          }
+        }
       }
     } catch (error) {
       console.error('🔧 NotionSettingsContext: ❌ Failed to load databases:', error);
@@ -163,12 +197,13 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     } finally {
       setIsLoadingDatabases(false);
       loadingDatabasesRef.current = false;
+      setHasLoadedDatabases(true);
     }
-  };
+  }, [notionSettings]);
 
   const loadDatabaseProperties = useCallback(async (databaseId: string) => {
     if (!databaseId || !isAuthenticated) return;
-    
+
     try {
       setIsLoadingProperties(true);
       console.log('🔧 NotionSettingsContext: Loading database properties for:', databaseId);
@@ -183,14 +218,45 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     }
   }, [isAuthenticated]);
 
-  // Load database properties when database is selected (after declaration to satisfy TS/ESLint)
+  // Load database properties when database is selected and available
   useEffect(() => {
-    if (selectedDatabase && isAuthenticated) {
+    if (!selectedDatabase) {
+      setDatabaseProperties(null);
+      savedDatabaseIdRef.current = null;
+      return;
+    }
+
+    if (!hasLoadedDatabases) {
+      return;
+    }
+
+    const databaseExists = databases.some((db) => {
+      if (db.id === selectedDatabase) return true;
+      return Array.isArray(db.data_sources) && db.data_sources.some((ds) => ds.id === selectedDatabase);
+    });
+
+    if (!databaseExists) {
+      console.warn('🔧 NotionSettingsContext: Selected database no longer available:', selectedDatabase);
+      setSelectedDatabase('');
+      setDatabaseProperties(null);
+      savedDatabaseIdRef.current = null;
+      return;
+    }
+
+    savedDatabaseIdRef.current = selectedDatabase;
+
+    if (isAuthenticated) {
       loadDatabaseProperties(selectedDatabase);
     }
-  }, [selectedDatabase, isAuthenticated, loadDatabaseProperties]);
+  }, [selectedDatabase, databases, isAuthenticated, loadDatabaseProperties, hasLoadedDatabases]);
 
-  const loadSettings = async () => {
+  useEffect(() => {
+    if (!selectedDatabase) {
+      savedDatabaseIdRef.current = null;
+    }
+  }, [selectedDatabase]);
+
+  const loadSettings = useCallback(async () => {
     if (loadingSettingsRef.current) {
       console.log('🔧 NotionSettingsContext: Settings loading already in progress, skipping...');
       return;
@@ -201,6 +267,7 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
       console.log('🔧 NotionSettingsContext: 🔧 Loading settings...');
       const settings = await NotionService.getSettings();
       console.log('🔧 NotionSettingsContext: ✅ Settings loaded:', settings);
+      savedDatabaseIdRef.current = settings?.databaseId || null;
       
       if (settings) {
         setNotionSettings(settings);
@@ -256,7 +323,21 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
     } finally {
       loadingSettingsRef.current = false;
     }
-  };
+  }, []);
+
+  // Initialize data when authenticated
+  useEffect(() => {
+    if (isAuthenticated && !hasInitializedRef.current) {
+      console.log('🔧 NotionSettingsContext: First initialization');
+      loadSettings();
+      loadDatabases();
+      hasInitializedRef.current = true;
+    } else if (!isAuthenticated) {
+      console.log('🔧 NotionSettingsContext: Not authenticated, resetting state');
+      resetState();
+      hasInitializedRef.current = false;
+    }
+  }, [isAuthenticated, loadSettings, loadDatabases]);
 
   const saveSettings = async (settings: NotionIntegrationSettings) => {
     if (!settings.databaseId) {
@@ -359,4 +440,4 @@ export const NotionSettingsProvider: React.FC<NotionSettingsProviderProps> = ({ 
       {children}
     </NotionSettingsContext.Provider>
   );
-}; 
+};

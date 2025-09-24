@@ -951,9 +951,12 @@ const Settings: React.FC = () => {
                         id="database-select"
                         value={selectedDatabase}
                         onChange={(e) => setSelectedDatabase(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        disabled={isLoadingDatabases}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       >
-                        <option value="">Choose a database...</option>
+                        <option value="">
+                          {isLoadingDatabases ? "Loading databases..." : "Choose a database..."}
+                        </option>
                         {databases
                           .slice()
                           .sort((a, b) => a.title.localeCompare(b.title))
@@ -967,7 +970,12 @@ const Settings: React.FC = () => {
                     
                     {selectedDatabase && (
                       <div className="text-sm text-gray-600">
-                        Selected: {databases.find(db => db.id === selectedDatabase)?.title}
+                        Selected: {
+                          isLoadingDatabases
+                            ? <span className="italic">Loading...</span>
+                            : databases.find(db => db.id === selectedDatabase)?.title ||
+                              <span className="text-orange-600 font-medium">⚠️ Database ID {selectedDatabase.slice(0, 8)}... (not found in available databases)</span>
+                        }
                       </div>
                     )}
                   </div>
@@ -975,11 +983,23 @@ const Settings: React.FC = () => {
               </div>
 
               {/* Field Mappings */}
-              {selectedDatabase && databaseProperties && (
+              {selectedDatabase && (
                 <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-semibold text-gray-900">Field Mappings</h2>
-                    {databaseProperties.suggestedMappings && (
+                    <div>
+                      <h2 className="text-xl font-semibold text-gray-900">Field Mappings</h2>
+                      {isLoadingDatabases && (
+                        <p className="text-sm text-gray-500 mt-1">
+                          Database: <span className="italic">Loading...</span>
+                        </p>
+                      )}
+                      {!isLoadingDatabases && databases.length > 0 && (
+                        <p className="text-sm text-gray-500 mt-1">
+                          Database: {databases.find(db => db.id === selectedDatabase)?.title || `Unknown (${selectedDatabase.slice(0, 8)}...)`}
+                        </p>
+                      )}
+                    </div>
+                    {databaseProperties?.suggestedMappings && (
                       <button
                         onClick={applySuggestedMappings}
                         className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
@@ -989,10 +1009,12 @@ const Settings: React.FC = () => {
                     )}
                   </div>
 
-                  {isLoadingProperties ? (
+                  {!databaseProperties ? (
                     <div className="flex items-center py-4">
                       <SpinnerGapIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.BOLD} className="animate-spin text-blue-600 mr-2" />
-                      <span className="text-gray-600">Loading database properties...</span>
+                      <span className="text-gray-600">
+                        {isLoadingProperties ? 'Loading database properties...' : 'Select a database to configure field mappings'}
+                      </span>
                     </div>
                   ) : (
                     <>
