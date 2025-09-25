@@ -49,7 +49,6 @@ const CategoriesModal: React.FC<CategoriesModalProps> = ({
   onUnmapCategory
 }) => {
   const [isMounted, setIsMounted] = useState(false);
-  const [isCategoriesSectionCollapsed, setIsCategoriesSectionCollapsed] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -109,12 +108,12 @@ const CategoriesModal: React.FC<CategoriesModalProps> = ({
             <div 
               className="flex items-center justify-between p-3 mb-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
               // onClick={() => setIsCategoriesSectionCollapsed(!isCategoriesSectionCollapsed)}
-              title={isCategoriesSectionCollapsed ? 'Expand categories' : 'Collapse categories'}
+              title={'Categories section'}
             >
               <div className="flex items-center gap-2">
                 <h4 className="font-medium text-gray-900">Categories / Genres</h4>
                 <svg 
-                  className={`w-4 h-4 transition-transform duration-200 text-gray-600 ${isCategoriesSectionCollapsed ? 'rotate-0' : 'rotate-90'}`} 
+                  className={`w-4 h-4 transition-transform duration-200 text-gray-600 rotate-90`} 
                   fill="currentColor" 
                   viewBox="0 0 20 20"
                 >
@@ -153,19 +152,17 @@ const CategoriesModal: React.FC<CategoriesModalProps> = ({
             </p>
           </div>
 
-          {!isCategoriesSectionCollapsed && (
-            <CategoryList
-              processedCategories={processedCategories}
-              selectedCategories={selectedCategories}
-              showSimilarCategories={showSimilarCategories}
-              onToggleCategory={onToggleCategory}
-              onIgnoreCategory={onIgnoreCategory}
-              onUnignoreCategory={onUnignoreCategory}
-              onMergeCategories={onMergeCategories}
-              onManualMapping={onManualMapping}
-              onUnmapCategory={onUnmapCategory}
-            />
-          )}
+          <CategoryList
+            processedCategories={processedCategories}
+            selectedCategories={selectedCategories}
+            showSimilarCategories={showSimilarCategories}
+            onToggleCategory={onToggleCategory}
+            onIgnoreCategory={onIgnoreCategory}
+            onUnignoreCategory={onUnignoreCategory}
+            onMergeCategories={onMergeCategories}
+            onManualMapping={onManualMapping}
+            onUnmapCategory={onUnmapCategory}
+          />
         </div>
 
         {/* Footer */}

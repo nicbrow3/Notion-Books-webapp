@@ -215,7 +215,7 @@ export const useNotionIntegration = ({
       }
       return 'unknown';
     }
-  }, [isNotionConnected, notionSettings]);
+  }, [currentBook?.isbn10, currentBook?.isbn13, currentBook?.title, isNotionConnected, notionSettings]);
 
   // Auto-check for duplicates when modal opens
   useEffect(() => {

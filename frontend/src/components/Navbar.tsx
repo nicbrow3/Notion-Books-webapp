@@ -7,6 +7,7 @@ const Navbar: React.FC = () => {
   const booksRef = useRef<HTMLAnchorElement>(null);
   const settingsRef = useRef<HTMLAnchorElement>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const isActive = (path: string) => {
     return location.pathname === path;
   };
@@ -43,7 +44,7 @@ const Navbar: React.FC = () => {
     } else {
       setIndicatorStyle({ width: 0, left: 0, opacity: 0 });
     }
-  }, [location.pathname, isHomePage]);
+  }, [location.pathname, isHomePage, isActive]);
 
   return (
     <nav className="bg-white shadow-sm border-b">

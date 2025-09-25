@@ -5,7 +5,6 @@ import FieldSourceTable from './FieldSourceTable';
 import { CategoryService } from '../../services/categoryService';
 import SourceBrowser from './SourceBrowser';
 import { parseHtmlForDisplay, extractPlainText } from './utils/htmlUtils';
-import { formatDate as formatDateUtil } from './utils/dateUtils';
 
 export interface FieldSelections {
   description: 'audiobook' | 'original' | 'audiobook_summary' | number; // number = edition index
@@ -319,6 +318,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
   };
 
   // Helper function to find the earliest date among all available sources
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const findEarliestDateSource = () => {
     const dateSources: Array<{
       value: 'audiobook' | 'original' | 'first_published' | 'copyright' | 'audiobook_copyright' | number;
@@ -518,7 +518,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
     if (hasChanges) {
       setFieldSelections(newSelections);
     }
-  }, [book.audiobookData, editions.length, notionSettings?.useEnglishOnlySources]);
+  }, [book.publisher, fieldSelections, findEarliestDateSource, book.audiobookData, editions.length, notionSettings?.useEnglishOnlySources]);
 
   // Get available description sources
   const getDescriptionSources = () => {
@@ -575,11 +575,6 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
   };
 
   // Get the source label for the selected description
-  const getSelectedDescriptionLabel = () => {
-    const sources = getDescriptionSources();
-    const selectedSource = sources.find(source => source.value === fieldSelections.description);
-    return selectedSource?.label || 'Original Book';
-  };
 
   // Get available publisher sources
   const getPublisherSources = () => {
@@ -831,6 +826,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
   };
 
   // Notify parent of current selections
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const notifyFieldSelectionChange = (newSelections?: FieldSelections) => {
     const selections = newSelections || fieldSelections;
     if (onFieldSelectionChange) {
@@ -848,7 +844,7 @@ const BookInfoPanel: React.FC<BookInfoPanelProps> = ({
   // Call notification when selections change
   useEffect(() => {
     notifyFieldSelectionChange();
-  }, [fieldSelections]);
+  }, [fieldSelections, notifyFieldSelectionChange]);
 
   const formatAuthors = (authors: string[]) => {
     if (!authors || authors.length === 0) return 'Unknown Author';

@@ -6,12 +6,6 @@
 export const parseAndFormatHtml = (htmlString: string): string => {
   if (!htmlString) return '';
   
-  // Basic HTML entity decoding
-  const decodeHtmlEntities = (str: string): string => {
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = str;
-    return textarea.value;
-  };
   
   // Remove or convert HTML tags to formatted text
   let formatted = htmlString

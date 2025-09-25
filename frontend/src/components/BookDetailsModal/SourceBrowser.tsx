@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { BookSearchResult, BookEdition } from '../../types/book';
-import { parseHtmlForDisplay, extractPlainText } from './utils/htmlUtils';
+import { parseHtmlForDisplay } from './utils/htmlUtils';
 
 interface SourceBrowserProps {
   book: BookSearchResult;
@@ -84,7 +84,6 @@ const SourceBrowser: React.FC<SourceBrowserProps> = ({
     const tooltipWidth = 350; // Width of the tooltip (from the CSS)
     
     // Get viewport dimensions
-    const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
     
     // Default position (right of the element)

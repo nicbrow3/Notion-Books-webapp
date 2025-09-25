@@ -53,7 +53,6 @@ const AudiobookSelectionModal: React.FC<AudiobookSelectionModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [manualAsin, setManualAsin] = useState('');
   const [manualLookupLoading, setManualLookupLoading] = useState(false);
-  const [selectedAsin, setSelectedAsin] = useState<string | null>(null);
   const [loadingAsin, setLoadingAsin] = useState<string | null>(null);
 
   // Search for audiobooks when modal opens
@@ -61,6 +60,7 @@ const AudiobookSelectionModal: React.FC<AudiobookSelectionModalProps> = ({
     if (isOpen && bookTitle && bookAuthor) {
       searchAudiobooks();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, bookTitle, bookAuthor]);
 
   const searchAudiobooks = async () => {
@@ -96,7 +96,6 @@ const AudiobookSelectionModal: React.FC<AudiobookSelectionModalProps> = ({
 
   const selectAudiobook = async (asin: string, bookTitle: string) => {
     setLoadingAsin(asin);
-    setSelectedAsin(asin);
 
     try {
       console.log(`🎯 Selecting audiobook: ${asin}`);
@@ -118,7 +117,6 @@ const AudiobookSelectionModal: React.FC<AudiobookSelectionModalProps> = ({
       toast.error('Failed to select audiobook. Please try again.');
     } finally {
       setLoadingAsin(null);
-      setSelectedAsin(null);
     }
   };
 
@@ -163,12 +161,6 @@ const AudiobookSelectionModal: React.FC<AudiobookSelectionModalProps> = ({
     }
   };
 
-  const formatDuration = (durationHours: number) => {
-    if (durationHours < 1) {
-      return `${Math.round(durationHours * 60)} min`;
-    }
-    return `${durationHours.toFixed(1)} hrs`;
-  };
 
   if (!isOpen) return null;
 

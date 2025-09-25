@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { BookSearchResult, BookEdition, BookEditionsResponse, AudiobookData } from '../../../types/book';
+import { BookSearchResult, BookEdition, BookEditionsResponse } from '../../../types/book';
 import { BookService } from '../../../services/bookService';
 import { CategoryService } from '../../../services/categoryService';
 import { FieldSelections } from '../BookInfoPanel';
@@ -260,7 +260,7 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
     if (needsUpdate) {
       setFieldSelections(updatedSelections);
     }
-  }, [isOpen, currentBook.audiobookData]);
+  }, [editions.length, fieldSelections, isOpen, currentBook.audiobookData]);
 
   const fetchAllEditionsCategories = useCallback(async () => {
     if (!currentBook.openLibraryKey) return;
@@ -397,7 +397,7 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
     } finally {
       setLoadingEditions(false);
     }
-  }, [currentBook.openLibraryKey, currentBook.title, notionSettings?.useEnglishOnlySources]);
+  }, [currentBook, notionSettings]);
 
   useEffect(() => {
     editionsRequestCacheRef.current.clear();
@@ -460,7 +460,7 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
     } finally {
       setLoadingAudiobook(false);
     }
-  }, [currentBook.title, currentBook.authors]);
+  }, [currentBook]);
 
   // Function to get available sources for a field
   const getFieldSources = (fieldId: string) => {

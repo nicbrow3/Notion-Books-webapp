@@ -38,7 +38,8 @@ const isLikelyEnglish = (text: string): boolean => {
   if (!text || typeof text !== 'string') return false;
 
   // 1. Reject strings that contain obvious non-Latin characters
-  const hasNonLatinChars = /[^\u0000-\u024F\u1E00-\u1EFF\s\d.,;:!?'"()[\]{}\-_/\\@#$%^&*+=<>|~`]/.test(text);
+  // eslint-disable-next-line no-control-regex
+  const hasNonLatinChars = /[^\u0001-\u024F\u1E00-\u1EFF\s\d.,;:!?'"()[\]{}\-_/\\@#$%^&*+=<>|~`]/.test(text);
   if (hasNonLatinChars) return false;
 
   // Clean tokenisation – split on anything that isn't a letter (keeps words like "sci-fi")
@@ -115,14 +116,14 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
       setIsClosing(false); // Reset closing state when modal opens
       bookData.fetchAllEditionsCategories();
     }
-  }, [isOpen, bookData.currentBook.openLibraryKey, bookData.fetchAllEditionsCategories]);
+  }, [isOpen, bookData]);
 
   useEffect(() => {
     if (isOpen && !bookData.currentBook.audiobookData && !bookData.loadingAudiobook) {
       setIsClosing(false); // Reset closing state when modal opens
       bookData.fetchAudiobookData();
     }
-  }, [isOpen, bookData.currentBook.audiobookData, bookData.loadingAudiobook, bookData.fetchAudiobookData]);
+  }, [isOpen, bookData]);
 
   // Update categories from editions when they're loaded
   useEffect(() => {
@@ -223,14 +224,8 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         categoryManagement.setRawCategories(preSplitCategories);
       }
     }
-  }, [
-    bookData.editions,
-    bookData.currentBook.categories,
-    bookData.currentBook.audiobookData?.genres,
-    notionSettings?.useEnglishOnlySources,
-    categoryManagement.rawCategories,
-    categoryManagement.setRawCategories
-  ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookData.currentBook.title, categoryManagement, notionSettings]);
 
   // Handler for "Add another book" button
   const handleAddAnotherBook = () => {

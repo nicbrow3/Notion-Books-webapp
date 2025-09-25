@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { BookSearchResult, BookEdition } from '../types/book';
-import { NotionService } from '../services/notionService';
 import { CategoryService } from '../services/categoryService';
 import { HeadphonesIcon } from '@phosphor-icons/react';
 import { ICON_CONTEXTS, ICON_WEIGHTS } from '../constants/iconConfig';
@@ -25,9 +24,7 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
   onModalOpen,
   onModalClose
 }) => {
-  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [duplicateStatus, setDuplicateStatus] = useState<'unknown' | 'checking' | 'duplicate' | 'unique'>('unknown');
-  const [existingNotionPage, setExistingNotionPage] = useState<{ url: string; title: string } | null>(null);
   const [showEditionsModal, setShowEditionsModal] = useState(false);
 
   const [currentBook, setCurrentBook] = useState<BookSearchResult>(book);
@@ -47,10 +44,6 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
     }
   }, [showEditionsModal, onModalOpen, onModalClose]);
 
-  const handleSettingsUpdated = (updatedSettings: any) => {
-    setNotionSettings(updatedSettings);
-    toast.success('Settings updated! New field mappings will be used for future books.');
-  };
 
   const handleClick = () => {
     if (onSelect) {
@@ -108,45 +101,6 @@ const BookCardWithNotion: React.FC<BookCardWithNotionProps> = ({
       return 'bg-orange-100 text-orange-700';
     } else {
       return 'bg-red-100 text-red-700';
-    }
-  };
-
-  const checkForDuplicates = async () => {
-    if (!isNotionConnected || !notionSettings?.databaseId) {
-      return;
-    }
-
-    try {
-      setIsCheckingDuplicates(true);
-      setDuplicateStatus('checking');
-
-      const existingBooks = await NotionService.searchExistingBooks(
-        notionSettings.databaseId,
-        book.isbn13 || book.isbn10 || undefined,
-        book.title,
-        notionSettings.fieldMapping
-      );
-
-      if (existingBooks.length > 0) {
-        setDuplicateStatus('duplicate');
-        setExistingNotionPage({
-          url: existingBooks[0].url,
-          title: existingBooks[0].title
-        });
-        toast(`This book already exists in your Notion database (${existingBooks.length} match${existingBooks.length > 1 ? 'es' : ''})`, {
-          icon: '⚠️',
-          duration: 4000,
-        });
-      } else {
-        setDuplicateStatus('unique');
-        setExistingNotionPage(null);
-      }
-    } catch (error) {
-      console.error('Duplicate check failed:', error);
-      setDuplicateStatus('unknown');
-      toast.error('Failed to check for duplicates');
-    } finally {
-      setIsCheckingDuplicates(false);
     }
   };
 
