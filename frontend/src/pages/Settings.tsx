@@ -1009,12 +1009,10 @@ const Settings: React.FC = () => {
                     )}
                   </div>
 
-                  {!databaseProperties ? (
+                  {isLoadingProperties ? (
                     <div className="flex items-center py-4">
                       <SpinnerGapIcon size={ICON_CONTEXTS.SETTINGS.DEFAULT} weight={ICON_WEIGHTS.BOLD} className="animate-spin text-blue-600 mr-2" />
-                      <span className="text-gray-600">
-                        {isLoadingProperties ? 'Loading database properties...' : 'Select a database to configure field mappings'}
-                      </span>
+                      <span className="text-gray-600">Loading database properties...</span>
                     </div>
                   ) : (
                     <>

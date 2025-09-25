@@ -1,0 +1,45 @@
+📜 Privacy Policy (Boilerplate)
+
+Effective Date: 9-25-25
+
+This Privacy Policy explains how we collect, use, and protect your information when you use our app.
+
+1. Information We Collect
+
+Book Data: When you search, we retrieve book information from third-party APIs (e.g., Google Books).
+
+Notion Data: If you connect your Notion account, we access only the fields and databases you authorize through the Notion API.
+
+Basic Usage Data: We may collect minimal app analytics (e.g., error logs) to improve performance.
+
+2. How We Use Information
+
+To display book results from external APIs.
+
+To allow you to add selected books as pages to your Notion database.
+
+To maintain and improve the app’s functionality.
+
+3. Data Sharing
+
+We do not sell or share your data with advertisers or third parties.
+
+Your data is only transmitted between the app, Google Books API, and Notion API as needed for functionality.
+
+4. Security
+
+We take reasonable steps to protect your data. However, no method of transmission over the internet is 100% secure.
+
+5. Third-Party Services
+
+Google Books API (see Google’s Privacy Policy)
+
+Notion API (see Notion’s Privacy Policy)
+
+Your use of these services is also subject to their terms.
+
+6. Your Rights
+
+You can revoke the app’s access to your Notion account at any time through Notion’s integration settings.
+
+You may uninstall or stop using the app at any time.
