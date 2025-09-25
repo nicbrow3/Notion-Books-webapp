@@ -80,3 +80,4 @@ temp/
 
 # File storage data (user settings)
 backend/src/data/ 
+.vercel
