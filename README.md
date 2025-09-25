@@ -1,9 +1,8 @@
-Absolutely. Here is the complete README in raw Markdown format, ready to be copied directly into your `README.md` file.
-
-
 # Notion Books
 
-A web application that fetches book information from Google Books & Open Library, also includea audiobook data from Audnexus, and adds it to your Notion database after your review.
+Connect book data to your Notion databases.
+
+A web application that fetches book information from Google Books & Open Library, also includes audiobook data from Audnexus, then adds it to your Notion database after your review.
 
 ![alt text](screenshots/BookDetails.png)
 ## ✨ Features
