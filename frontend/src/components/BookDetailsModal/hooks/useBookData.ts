@@ -105,6 +105,12 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
         case 'thumbnail':
           if (selection === 'audiobook' && currentBook.audiobookData?.image) {
             finalData.thumbnail = currentBook.audiobookData.image;
+          } else if (typeof selection === 'string' && selection.startsWith('variant_') && currentBook.editionVariants) {
+            const variantIndex = parseInt(selection.replace('variant_', ''));
+            const variant = currentBook.editionVariants[variantIndex];
+            if (variant?.thumbnail) {
+              finalData.thumbnail = variant.thumbnail;
+            }
           } else if (typeof selection === 'number' && editions[selection]?.thumbnail) {
             finalData.thumbnail = editions[selection].thumbnail;
           } else {
@@ -116,6 +122,12 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
             finalData.description = extractPlainText(currentBook.audiobookData.description);
           } else if (selection === 'audiobook_summary' && currentBook.audiobookData?.summary) {
             finalData.description = extractPlainText(currentBook.audiobookData.summary);
+          } else if (typeof selection === 'string' && selection.startsWith('variant_') && currentBook.editionVariants) {
+            const variantIndex = parseInt(selection.replace('variant_', ''));
+            const variant = currentBook.editionVariants[variantIndex];
+            if (variant?.description) {
+              finalData.description = variant.description;
+            }
           } else if (typeof selection === 'number' && editions[selection]?.description) {
             finalData.description = editions[selection].description;
           } else {
@@ -125,6 +137,12 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
         case 'publisher':
           if (selection === 'audiobook' && currentBook.audiobookData?.publisher) {
             finalData.publisher = currentBook.audiobookData.publisher;
+          } else if (typeof selection === 'string' && selection.startsWith('variant_') && currentBook.editionVariants) {
+            const variantIndex = parseInt(selection.replace('variant_', ''));
+            const variant = currentBook.editionVariants[variantIndex];
+            if (variant?.publisher) {
+              finalData.publisher = variant.publisher;
+            }
           } else if (typeof selection === 'number' && editions[selection]?.publisher) {
             finalData.publisher = editions[selection].publisher;
           } else {
@@ -134,6 +152,12 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
         case 'releaseDate':
           if (selection === 'audiobook' && currentBook.audiobookData?.publishedDate) {
             finalData.publishedDate = currentBook.audiobookData.publishedDate;
+          } else if (typeof selection === 'string' && selection.startsWith('variant_') && currentBook.editionVariants) {
+            const variantIndex = parseInt(selection.replace('variant_', ''));
+            const variant = currentBook.editionVariants[variantIndex];
+            if (variant?.publishedDate) {
+              finalData.publishedDate = variant.publishedDate;
+            }
           } else if (typeof selection === 'number' && editions[selection]?.publishedDate) {
             finalData.publishedDate = editions[selection].publishedDate;
           } else {
@@ -141,7 +165,13 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
           }
           break;
         case 'pageCount':
-          if (typeof selection === 'number' && editions[selection]?.pageCount) {
+          if (typeof selection === 'string' && selection.startsWith('variant_') && currentBook.editionVariants) {
+            const variantIndex = parseInt(selection.replace('variant_', ''));
+            const variant = currentBook.editionVariants[variantIndex];
+            if (variant?.pageCount) {
+              finalData.pageCount = variant.pageCount;
+            }
+          } else if (typeof selection === 'number' && editions[selection]?.pageCount) {
             finalData.pageCount = editions[selection].pageCount;
           } else {
             finalData.pageCount = book.pageCount;
@@ -511,7 +541,44 @@ export const useBookData = ({ book, isOpen, notionSettings }: UseBookDataProps):
       }
     }
 
-    // Add sources from different editions
+    // Add sources from search-consolidated edition variants (deluxe, special editions, etc.)
+    if (currentBook.editionVariants && currentBook.editionVariants.length > 0) {
+      currentBook.editionVariants.forEach((variant, index) => {
+        let variantValue: any = null;
+        let variantLabel = variant.title;
+
+        // Extract edition type from title for better labeling
+        const deluxeMatch = variantLabel.toLowerCase().match(/\b(deluxe|special|collector's?|premium|limited|anniversary|commemorative|expanded|enhanced|director's?)\s*(edition|version)?\b/);
+        if (deluxeMatch) {
+          const editionType = deluxeMatch[1].charAt(0).toUpperCase() + deluxeMatch[1].slice(1);
+          variantLabel = `${editionType} Edition`;
+        } else if (!variant.isOriginal) {
+          variantLabel = `Alternative Edition`;
+        } else {
+          variantLabel = `Original Edition`;
+        }
+
+        switch (fieldId) {
+          case 'title': variantValue = variant.title; break;
+          case 'publisher': variantValue = variant.publisher; break;
+          case 'pageCount': variantValue = variant.pageCount; break;
+          case 'description': variantValue = variant.description; break;
+          case 'thumbnail': variantValue = variant.thumbnail; break;
+          case 'releaseDate': variantValue = variant.publishedDate; break;
+        }
+
+        // Add if the variant has a value and it's not already in sources
+        if (variantValue && !sources.some(s => s.content === variantValue)) {
+          sources.push({
+            value: `variant_${index}`,
+            label: variantLabel,
+            content: fieldId === 'releaseDate' ? formatDate(variantValue) : variantValue,
+          });
+        }
+      });
+    }
+
+    // Add sources from different editions (Open Library editions)
     if (editions && editions.length > 0) {
       editions.forEach((edition, index) => {
         let editionValue: any = null;

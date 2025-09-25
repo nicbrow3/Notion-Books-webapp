@@ -39,22 +39,19 @@ class BookSearchService {
 
       let finalBooks = [];
 
-      // If Google Books has good results, enhance them with Open Library data
-      if (googleResult.success && googleResult.books.length > 0) {
-        const enhancedGoogleBooks = await Promise.all(
-          googleResult.books.map(book => this.enhanceBookWithOpenLibraryData(book))
-        );
+      // Enhance Google results with Open Library data when available
+      const enhancedGoogleBooks = googleResult.success && googleResult.books.length > 0
+        ? await Promise.all(
+            googleResult.books.map(book => this.enhanceBookWithOpenLibraryData(book))
+          )
+        : [];
 
-        // If Open Library also has results, merge and deduplicate
-        if (openLibraryResult.success && openLibraryResult.books.length > 0) {
-          finalBooks = this.mergeAndRankResults(enhancedGoogleBooks, openLibraryResult.books, query);
-        } else {
-          finalBooks = enhancedGoogleBooks;
-        }
-      } else if (openLibraryResult.success && openLibraryResult.books.length > 0) {
-        // If Google Books failed but Open Library has results, use Open Library
-        console.log('📚 Using Open Library as primary source');
-        finalBooks = openLibraryResult.books;
+      const openLibraryBooks = openLibraryResult.success && openLibraryResult.books.length > 0
+        ? openLibraryResult.books
+        : [];
+
+      if (enhancedGoogleBooks.length > 0 || openLibraryBooks.length > 0) {
+        finalBooks = this.mergeAndRankResults(enhancedGoogleBooks, openLibraryBooks, query);
       }
 
       // Enrich with audiobook data if requested
@@ -309,19 +306,78 @@ class BookSearchService {
    */
   mergeAndRankResults(googleBooks, openLibraryBooks, query) {
     const mergedBooks = [];
-    const seenTitles = new Set();
+    const seenTitles = new Map();
+
+    // Helper function to determine if a title is a special edition
+    const isSpecialEdition = (title) => {
+      const titleLower = title.toLowerCase();
+      return /\b(deluxe|special|collector's?|premium|limited|anniversary|commemorative|expanded|enhanced|director's?)\b/.test(titleLower) ||
+             /\b(hardcover|paperback|hardback)\b/.test(titleLower) ||
+             /\([^)]*(?:edition|version|release|deluxe|special|collector|hardcover|paperback)[^)]*\)/i.test(titleLower);
+    };
+
+    const upsertBook = (book, sourceLabel) => {
+      if (!book?.title) {
+        return;
+      }
+
+      const normalizedTitle = normalizeForDedup(book.title);
+      const existingIndex = seenTitles.get(normalizedTitle);
+      const bookWithScore = {
+        ...book,
+        relevanceScore: calculateRelevanceScore(book, query)
+      };
+
+      if (existingIndex === undefined) {
+        bookWithScore.primarySource = sourceLabel;
+        mergedBooks.push(bookWithScore);
+        seenTitles.set(normalizedTitle, mergedBooks.length - 1);
+        return;
+      }
+
+      const existingBook = mergedBooks[existingIndex];
+      const currentBookIsSpecial = isSpecialEdition(book.title);
+      const existingBookIsSpecial = isSpecialEdition(existingBook.title);
+
+      // Prefer the standard edition as the primary book
+      let primaryBook, secondaryBook;
+      if (!currentBookIsSpecial && existingBookIsSpecial) {
+        // Current book is standard, existing is special - make current the primary
+        primaryBook = { ...bookWithScore, primarySource: sourceLabel };
+        secondaryBook = existingBook;
+      } else if (currentBookIsSpecial && !existingBookIsSpecial) {
+        // Current book is special, existing is standard - keep existing as primary
+        primaryBook = existingBook;
+        secondaryBook = { ...bookWithScore, primarySource: sourceLabel };
+      } else {
+        // Both are special or both are standard - use existing logic (first wins)
+        primaryBook = existingBook;
+        secondaryBook = { ...bookWithScore, primarySource: sourceLabel };
+      }
+
+      const mergedBook = this.mergeDuplicateBooks(primaryBook, secondaryBook);
+
+      mergedBook.relevanceScore = Math.max(
+        existingBook.relevanceScore || 0,
+        bookWithScore.relevanceScore || 0
+      );
+
+      mergedBook.primarySource = primaryBook.primarySource;
+
+      mergedBooks[existingIndex] = mergedBook;
+    };
 
     // Helper function to calculate relevance score
     const calculateRelevanceScore = (book, query) => {
       let score = 0;
       const queryLower = query.toLowerCase();
       const titleLower = book.title.toLowerCase();
-      
+
       // Try to extract author from query (handles queries like "andy weir project hail mary")
       const queryWords = queryLower.split(/\s+/);
       let detectedAuthor = null;
       let remainingQuery = queryLower;
-      
+
       // Common author patterns in queries
       const authorPatterns = [
         // "by [author]" pattern
@@ -329,14 +385,14 @@ class BookSearchService {
         // Look for known author name patterns (first last, first middle last, etc.)
         /\b([a-z]+(?:\s+[a-z]\.?)?\s+[a-z]+)\b/i
       ];
-      
+
       for (const pattern of authorPatterns) {
         const match = queryLower.match(pattern);
         if (match && match[1]) {
           const potentialAuthor = match[1].trim();
           // Check if this potential author matches any of the book's authors
-          if (book.authors.some(author => 
-            author.toLowerCase().includes(potentialAuthor) || 
+          if (book.authors.some(author =>
+            author.toLowerCase().includes(potentialAuthor) ||
             potentialAuthor.includes(author.toLowerCase())
           )) {
             detectedAuthor = potentialAuthor;
@@ -345,20 +401,20 @@ class BookSearchService {
           }
         }
       }
-      
+
       // If no explicit author pattern, check if query contains author name
       if (!detectedAuthor) {
         for (const author of book.authors) {
           const authorLower = author.toLowerCase();
           const authorWords = authorLower.split(/\s+/);
-          
+
           // Check for full name match
           if (queryLower.includes(authorLower)) {
             detectedAuthor = authorLower;
             remainingQuery = queryLower.replace(authorLower, '').trim();
             break;
           }
-          
+
           // Check for last name match (if it's distinctive)
           const lastName = authorWords[authorWords.length - 1];
           if (lastName.length > 3 && queryLower.includes(lastName)) {
@@ -372,11 +428,11 @@ class BookSearchService {
           }
         }
       }
-      
+
       // Calculate author match score (significantly increased importance)
       let authorScore = 0;
       let hasCorrectAuthor = false;
-      
+
       if (detectedAuthor) {
         // Query contains author information
         for (const author of book.authors) {
@@ -394,14 +450,14 @@ class BookSearchService {
             const detectedWords = detectedAuthor.split(/\s+/);
             const authorLastName = authorWords[authorWords.length - 1];
             const detectedLastName = detectedWords[detectedWords.length - 1];
-            
+
             if (authorLastName === detectedLastName && authorLastName.length > 3) {
               authorScore = Math.max(authorScore, 40); // Last name match
               hasCorrectAuthor = true;
             }
           }
         }
-        
+
         // Heavy penalty for books with wrong authors when author is specified in query
         if (!hasCorrectAuthor) {
           score -= 50; // Major penalty for wrong author
@@ -418,12 +474,12 @@ class BookSearchService {
           }
         }
       }
-      
+
       score += authorScore;
-      
+
       // Title matching - use remaining query after removing author
       const titleQuery = remainingQuery || queryLower;
-      
+
       // Exact title match gets highest score
       if (titleLower === titleQuery) {
         score += 100;
@@ -435,42 +491,60 @@ class BookSearchService {
         // Word-based matching for title
         const titleWords = titleQuery.split(/\s+/).filter(word => word.length > 2);
         const bookTitleWords = titleLower.split(/\s+/).filter(word => word.length > 2);
-        
+
         if (titleWords.length > 0) {
-          const matchingWords = titleWords.filter(word => 
-            bookTitleWords.some(bookWord => 
+          const matchingWords = titleWords.filter(word =>
+            bookTitleWords.some(bookWord =>
               bookWord.includes(word) || word.includes(bookWord)
             )
           );
-          
+
           const titleMatchRatio = matchingWords.length / titleWords.length;
           score += titleMatchRatio * 40;
-          
+
           // Bonus for exact word matches
           const exactWordMatches = titleWords.filter(word => bookTitleWords.includes(word));
           score += exactWordMatches.length * 5;
         }
       }
-      
+
       // Quality indicators (reduced importance to prioritize author/title matching)
       if (book.pageCount && book.pageCount > 0) score += 3;
       if (book.originalPublishedDate && book.originalPublishedDate !== book.publishedDate) score += 2;
       if (book.thumbnail) score += 2;
       if (book.isbn13 || book.isbn10) score += 2;
-      
+
       // Publication date reasonableness check
       if (book.originalPublishedDate) {
         const year = parseInt(book.originalPublishedDate);
         if (year > 1800 && year < 2025) score += 1;
       }
-      
+
       // Ensure minimum score is 0
       return Math.max(0, Math.round(score));
     };
 
-    // Helper function to create a normalized title for deduplication
+    // Enhanced helper function to create a normalized title for deduplication
+    // This will group special editions, deluxe editions, etc. with the main title
     const normalizeForDedup = (title) => {
       return title.toLowerCase()
+        // Remove common edition indicators that should be grouped together
+        .replace(/\b(deluxe|special|collector's?|premium|limited|anniversary|commemorative|expanded|enhanced|director's?)\s+(edition|version|release|hardcover|paperback)\b/g, '')
+        .replace(/\b(deluxe|special|collector's?|premium|limited|anniversary|commemorative|expanded|enhanced|director's?)\b/g, '')
+        // Remove standalone format descriptors that shouldn't create separate entries
+        .replace(/\b(hardcover|paperback|hardback|trade\s+paperback|mass\s+market|library\s+binding|box(?:ed)?\s+set|boxed\s+set|slipcase(?:d)?|collector's?\s+box)\b/g, '')
+        // Remove trailing descriptors introduced by punctuation (e.g., "- Deluxe Hardcover")
+        .replace(/[:\-–—]\s*(deluxe|special|collector's?|premium|limited|anniversary|commemorative|expanded|enhanced|director's?|hardcover|paperback|slipcase(?:d)?|box(?:ed)?\s+set|collector's?\s+box)([^\w]|$)/g, ' ')
+        // Remove volume/book numbers that might cause separate entries
+        .replace(/\b(book|volume|vol\.?)\s+\d+\b/g, '')
+        // Remove series indicators
+        .replace(/\b(series|book)\s+\d+\b/g, '')
+        // Remove parenthetical edition info like "(Deluxe Edition)" or "(Hardcover)"
+        .replace(/\([^)]*(?:edition|version|release|deluxe|special|collector|hardcover|paperback)[^)]*\)/gi, '')
+        // Remove remaining trailing parenthetical or bracketed descriptors (series names, etc.)
+        .replace(/\s*\([^)]*\)\s*$/g, ' ')
+        .replace(/\s*\[[^\]]*\]\s*$/g, ' ')
+        // Clean up punctuation and normalize spaces
         .replace(/[^\w\s]/g, '')
         .replace(/\s+/g, ' ')
         .trim();
@@ -478,38 +552,12 @@ class BookSearchService {
 
     // Add Google Books results first (they usually have better metadata)
     for (const book of googleBooks) {
-      const normalizedTitle = normalizeForDedup(book.title);
-      if (!seenTitles.has(normalizedTitle)) {
-        seenTitles.add(normalizedTitle);
-        mergedBooks.push({
-          ...book,
-          relevanceScore: calculateRelevanceScore(book, query),
-          primarySource: 'google_books'
-        });
-      }
+      upsertBook(book, 'google_books');
     }
 
     // Add Open Library results that aren't duplicates
     for (const book of openLibraryBooks) {
-      const normalizedTitle = normalizeForDedup(book.title);
-      if (!seenTitles.has(normalizedTitle)) {
-        seenTitles.add(normalizedTitle);
-        mergedBooks.push({
-          ...book,
-          relevanceScore: calculateRelevanceScore(book, query),
-          primarySource: 'open_library'
-        });
-      } else {
-        // If we have a duplicate, merge the data to get the best of both
-        const existingIndex = mergedBooks.findIndex(existing => 
-          normalizeForDedup(existing.title) === normalizedTitle
-        );
-        
-        if (existingIndex !== -1) {
-          const existing = mergedBooks[existingIndex];
-          mergedBooks[existingIndex] = this.mergeDuplicateBooks(existing, book);
-        }
-      }
+      upsertBook(book, 'open_library');
     }
 
     // Sort by relevance score (highest first)
@@ -526,14 +574,111 @@ class BookSearchService {
     // Merge categories more intelligently
     const primaryCategories = this.splitAndCleanCategories(primaryBook.categories || [], true); // Skip splitting initially
     const secondaryCategories = this.splitAndCleanCategories(secondaryBook.categories || [], true); // Skip splitting initially
-    
+
     // Merge and deduplicate categories
     const mergedCategories = [...new Set([
       ...primaryCategories,
       ...secondaryCategories
     ])];
 
-    console.log(`🔗 Merged categories for "${primaryBook.title}": ${mergedCategories.length} total categories`);
+    // Handle edition consolidation - preserve edition information for field source selection
+    const mergedEditionVariants = Array.isArray(primaryBook.editionVariants)
+      ? [...primaryBook.editionVariants]
+      : [];
+
+    const variantKey = (variant) => [
+      (variant.title || '').toString().trim().toLowerCase(),
+      (variant.publisher || '').toString().trim().toLowerCase(),
+      (variant.publishedDate || '').toString().trim().toLowerCase(),
+      (variant.isbn13 || '').toString().trim().toUpperCase(),
+      (variant.isbn10 || '').toString().trim().toUpperCase()
+    ].join('|');
+
+    const variantKeys = new Set(mergedEditionVariants.map(variantKey));
+
+    const addVariant = (variant, isOriginalOverride) => {
+      if (!variant) {
+        return;
+      }
+
+      const hasMeaningfulData = Boolean(
+        (variant.title && variant.title.toString().trim()) ||
+        (variant.publisher && variant.publisher.toString().trim()) ||
+        (variant.publishedDate && variant.publishedDate.toString().trim()) ||
+        (variant.isbn13 && variant.isbn13.toString().trim()) ||
+        (variant.isbn10 && variant.isbn10.toString().trim())
+      );
+
+      if (!hasMeaningfulData) {
+        return;
+      }
+
+      const key = variantKey(variant);
+
+      if (variantKeys.has(key)) {
+        if (isOriginalOverride) {
+          const existingIndex = mergedEditionVariants.findIndex(stored => variantKey(stored) === key);
+          if (existingIndex !== -1 && !mergedEditionVariants[existingIndex].isOriginal) {
+            mergedEditionVariants[existingIndex] = {
+              ...mergedEditionVariants[existingIndex],
+              isOriginal: true
+            };
+          }
+        }
+        return;
+      }
+
+      mergedEditionVariants.push({
+        ...variant,
+        isOriginal: isOriginalOverride ?? Boolean(variant.isOriginal)
+      });
+      variantKeys.add(key);
+    };
+
+    if (Array.isArray(secondaryBook.editionVariants)) {
+      secondaryBook.editionVariants.forEach(variant => addVariant(variant, variant.isOriginal));
+    }
+
+    const valuesDiffer = (field) => {
+      const primaryValue = primaryBook[field];
+      const secondaryValue = secondaryBook[field];
+      if (primaryValue == null || secondaryValue == null) {
+        return false;
+      }
+
+      return primaryValue.toString().trim().toLowerCase() !== secondaryValue.toString().trim().toLowerCase();
+    };
+
+    const editionsDiffer = ['title', 'publisher', 'publishedDate', 'isbn13', 'isbn10']
+      .some(field => valuesDiffer(field));
+
+    if (editionsDiffer) {
+      addVariant({
+        title: primaryBook.title,
+        publisher: primaryBook.publisher,
+        publishedDate: primaryBook.publishedDate,
+        pageCount: primaryBook.pageCount,
+        isbn13: primaryBook.isbn13,
+        isbn10: primaryBook.isbn10,
+        thumbnail: primaryBook.thumbnail,
+        description: primaryBook.description,
+        source: primaryBook.source
+      }, true);
+
+      addVariant({
+        title: secondaryBook.title,
+        publisher: secondaryBook.publisher,
+        publishedDate: secondaryBook.publishedDate,
+        pageCount: secondaryBook.pageCount,
+        isbn13: secondaryBook.isbn13,
+        isbn10: secondaryBook.isbn10,
+        thumbnail: secondaryBook.thumbnail,
+        description: secondaryBook.description,
+        source: secondaryBook.source
+      }, false);
+    }
+
+    console.log(`🔗 Merged "${primaryBook.title}" with "${secondaryBook.title}" (${mergedEditionVariants.length} edition variants)`);
 
     return {
       ...primaryBook,
@@ -545,6 +690,8 @@ class BookSearchService {
       isbn10: primaryBook.isbn10 || secondaryBook.isbn10,
       thumbnail: primaryBook.thumbnail || secondaryBook.thumbnail,
       categories: mergedCategories,
+      // Store edition variants for later use in field source selection
+      editionVariants: mergedEditionVariants.length > 0 ? mergedEditionVariants : undefined,
       // Merge Open Library data
       openLibraryData: {
         ...primaryBook.openLibraryData,

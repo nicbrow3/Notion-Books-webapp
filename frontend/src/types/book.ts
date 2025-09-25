@@ -94,6 +94,19 @@ export interface Book {
   googleAudiobookHints?: GoogleAudiobookHints;
 }
 
+export interface EditionVariant {
+  title: string;
+  publisher?: string | null;
+  publishedDate?: string | null;
+  pageCount?: number | null;
+  isbn13?: string | null;
+  isbn10?: string | null;
+  thumbnail?: string | null;
+  description?: string | null;
+  source: string;
+  isOriginal: boolean;
+}
+
 export interface BookSearchResult {
   id: string;
   title: string;
@@ -126,7 +139,10 @@ export interface BookSearchResult {
     subjects?: string[];
     rawSubjects?: string[];
   };
-  
+
+  // Edition variants for consolidated search results (deluxe, special editions, etc.)
+  editionVariants?: EditionVariant[];
+
   // Google audiobook hints
   googleAudiobookHints?: GoogleAudiobookHints;
 }
