@@ -1,19 +1,15 @@
 const express = require('express');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
+const authToken = require('../utils/authToken');
 const router = express.Router();
 const googleBooksService = require('../services/googleBooksService');
 const bookSearchService = require('../services/bookSearchService');
 const bookSuggestionService = require('../services/bookSuggestionService');
 const AudiobookService = require('../services/audiobookService');
 
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
+// Middleware to check authentication (using JWT tokens)
+const requireAuth = authToken.requireAuth.bind(authToken);
 
 // Google Books API service
 const searchGoogleBooks = async (query, type = 'general') => {

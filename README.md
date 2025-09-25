@@ -5,6 +5,7 @@ Connect book data to your Notion databases.
 A web application that fetches book information from Google Books & Open Library, also includes audiobook data from Audnexus, then adds it to your Notion database after your review.
 
 ![alt text](screenshots/BookDetails.png)
+
 ## ✨ Features
 
 -   **Dual API Integration**: Fetches data from Google Books, with Open Library as a fallback for richer metadata like original publication dates.
@@ -15,23 +16,49 @@ A web application that fetches book information from Google Books & Open Library
 -   **Secure Notion Connection**: Uses a personal Notion integration token for a simple and secure setup.
 -   **Custom Field Mapping**: Visually map book data fields to the properties in your Notion database.
 -   **Duplicate Detection**: Checks if a book already exists in your Notion database before adding.
+-   **Serverless Architecture**: Deployed on Vercel with automatic scaling and global edge distribution.
 
 ## 💻 Tech Stack
 
--   **Backend**: Node.js, Express, PostgreSQL, Helmet
 -   **Frontend**: React, TypeScript, Tailwind CSS, React Router
+-   **Backend**: Vercel Serverless Functions, JWT Authentication
 -   **Data Sources**: Google Books API, Open Library API, Audnexus API, Audible Search API
+-   **Deployment**: Vercel (Recommended), Docker (Legacy)
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
-### 1. Prerequisites
+### ☁️ Vercel Deployment (Recommended)
 
--   Node.js v18+
--   Docker & Docker Compose (Recommended)
--   A [Notion Integration Token](#-notion-integration)
--   A [Google Books API Key](#-google-books-api) (Optional, but recommended)
+Deploy to Vercel with one click:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fnicbrow3%2FNotion-Books-webapp)
+
+**Or manual deployment:**
+
+1. **Install Vercel CLI:**
+   ```bash
+   npm install -g vercel
+   ```
+
+2. **Clone and deploy:**
+   ```bash
+   git clone https://github.com/nicbrow3/Notion-Books-webapp.git
+   cd Notion-Books-webapp
+   vercel
+   ```
+
+3. **Set environment variables** in Vercel Dashboard:
+   - `NOTION_INTEGRATION_TOKEN` (required)
+   - `AUTH_COOKIE_SECRET` (required - 32+ random characters)
+   - `GOOGLE_BOOKS_API_KEY` (optional)
+
+📖 **[Full Vercel Deployment Guide](VERCEL_DEPLOYMENT.md)**
+
+### 🐳 Docker Deployment (Legacy)
+
+The Docker deployment option is still available but is considered legacy. Vercel deployment is recommended for better performance, automatic scaling, and easier maintenance.
 
 ### 2. Local Development
 

@@ -11,12 +11,14 @@
     "dev:frontend": "cd frontend && npm run dev",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "build": "cd frontend && npm run build",
+    "build:vercel": "cd frontend && npm install && npm run build",
     "start": "cd backend && npm start",
     "electron": "electron .",
     "electron-dev": "ELECTRON_IS_DEV=true electron .",
     "build:electron": "npm run build && electron-builder",
     "dist": "npm run build && electron-builder --publish=never",
-    "pack": "npm run build && electron-builder --dir"
+    "pack": "npm run build && electron-builder --dir",
+    "vercel-dev": "vercel dev"
   },
   "keywords": [
     "notion",
@@ -32,7 +34,8 @@
   "devDependencies": {
     "concurrently": "^8.2.2",
     "electron": "^32.2.6",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "vercel": "^33.0.0"
   },
   "build": {
     "appId": "com.notionbooks.app",

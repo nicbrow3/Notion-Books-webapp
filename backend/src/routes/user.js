@@ -1,14 +1,9 @@
 const express = require('express');
+const authToken = require('../utils/authToken');
 const router = express.Router();
-const fileStorage = require('../utils/fileStorage');
 
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
+// Middleware to check authentication (using JWT tokens)
+const requireAuth = authToken.requireAuth.bind(authToken);
 
 // Get user settings (session-based)
 router.get('/settings', requireAuth, async (req, res) => {
@@ -133,97 +128,51 @@ router.get('/sessions', requireAuth, async (req, res) => {
   }
 });
 
-// Delete user account (with all associated data)
+// Delete user account (stateless - just clear auth cookie)
 router.delete('/account', requireAuth, async (req, res) => {
   try {
     const { confirmDelete } = req.body;
 
     if (confirmDelete !== 'DELETE_MY_ACCOUNT') {
-      return res.status(400).json({ 
-        error: 'Invalid confirmation. Please send "DELETE_MY_ACCOUNT" in confirmDelete field.' 
+      return res.status(400).json({
+        error: 'Invalid confirmation. Please send "DELETE_MY_ACCOUNT" in confirmDelete field.'
       });
     }
 
-    // Delete user and all associated data (cascading deletes will handle the rest)
-    const query = 'DELETE FROM users WHERE id = $1 RETURNING notion_user_id;';
-    const result = await pool.query(query, [req.session.userId]);
+    // Clear authentication cookie
+    authToken.clearAuthCookie(res);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Destroy session
-    req.session.destroy();
-
-    res.json({ 
-      success: true, 
-      message: 'Account deleted successfully',
-      deletedUserId: result.rows[0].notion_user_id
+    res.json({
+      success: true,
+      message: 'Account session cleared successfully',
+      deletedUserId: req.user.notionUserId
     });
 
   } catch (error) {
-    console.error('Error deleting user account:', error);
-    res.status(500).json({ error: 'Failed to delete user account' });
+    console.error('Error clearing user session:', error);
+    res.status(500).json({ error: 'Failed to clear user session' });
   }
 });
 
-// Export user data (GDPR compliance)
+// Export user data (GDPR compliance) - stateless version
 router.get('/export', requireAuth, async (req, res) => {
   try {
-    // Get user data
-    const userQuery = `
-      SELECT 
-        notion_user_id,
-        notion_workspace_name,
-        email,
-        created_at
-      FROM users 
-      WHERE id = $1;
-    `;
-
-    // Get user settings
-    const settingsQuery = `
-      SELECT 
-        notion_database_id,
-        field_mappings,
-        default_properties,
-        created_at,
-        updated_at
-      FROM user_settings 
-      WHERE user_id = $1;
-    `;
-
-    // Get all book sessions
-    const sessionsQuery = `
-      SELECT 
-        session_id,
-        book_data,
-        approved,
-        notion_page_id,
-        created_at,
-        expires_at
-      FROM book_sessions 
-      WHERE user_id = $1
-      ORDER BY created_at DESC;
-    `;
-
-    const [userResult, settingsResult, sessionsResult] = await Promise.all([
-      pool.query(userQuery, [req.session.userId]),
-      pool.query(settingsQuery, [req.session.userId]),
-      pool.query(sessionsQuery, [req.session.userId])
-    ]);
-
     const exportData = {
-      user: userResult.rows[0] || null,
-      settings: settingsResult.rows[0] || null,
-      sessions: sessionsResult.rows.map(session => ({
-        ...session,
-        book_data: typeof session.book_data === 'string' 
-          ? JSON.parse(session.book_data) 
-          : session.book_data
-      })),
+      user: {
+        notion_user_id: req.user.notionUserId,
+        notion_workspace_name: req.user.userData?.workspace_name,
+        email: req.user.userData?.email,
+        created_at: new Date().toISOString()
+      },
+      settings: {
+        notion_database_id: null, // Settings now stored in localStorage
+        field_mappings: {},
+        default_properties: {},
+        note: 'Settings are now stored locally in your browser'
+      },
+      sessions: [], // No persistent sessions in stateless mode
       exportedAt: new Date().toISOString(),
-      version: '1.0'
+      version: '2.0-stateless'
     };
 
     res.setHeader('Content-Type', 'application/json');

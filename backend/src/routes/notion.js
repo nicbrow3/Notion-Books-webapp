@@ -1,14 +1,10 @@
 const express = require('express');
 const axios = require('axios');
+const authToken = require('../utils/authToken');
 const router = express.Router();
 
-// Middleware to check authentication
-const requireAuth = (req, res, next) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
+// Middleware to check authentication (using JWT tokens)
+const requireAuth = authToken.requireAuth.bind(authToken);
 
 // Smart field mapping function
 const generateFieldMappings = (notionProperties) => {
@@ -151,18 +147,8 @@ const isTypeCompatible = (googleType, notionType) => {
 };
 
 // Get user's Notion access token
-const getNotionToken = async (req) => {
-  // For personal use, try session first, then environment variable
-  if (req.session.notionToken) {
-    return req.session.notionToken;
-  }
-  
-  // Fallback to environment variable for personal use
-  if (process.env.NOTION_INTEGRATION_TOKEN) {
-    return process.env.NOTION_INTEGRATION_TOKEN;
-  }
-  
-  throw new Error('No Notion token available');
+const getNotionToken = (req) => {
+  return authToken.getNotionToken(req);
 };
 
 // Make authenticated request to Notion API

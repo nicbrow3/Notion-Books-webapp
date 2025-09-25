@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
@@ -80,20 +80,8 @@ if (process.env.NODE_ENV === 'production') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Session configuration - using memory store (suitable for single-instance deployment)
-const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'fallback-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    // Only use secure cookies if HTTPS is explicitly enabled, not just because it's production
-    secure: process.env.FORCE_HTTPS === 'true' || (process.env.NODE_ENV === 'production' && process.env.DISABLE_SECURE_COOKIES !== 'true'),
-    httpOnly: true,
-    maxAge: parseInt(process.env.SESSION_COOKIE_MAX_AGE) || 24 * 60 * 60 * 1000 // 24 hours
-  }
-};
-
-app.use(session(sessionConfig));
+// Cookie parsing for JWT tokens
+app.use(cookieParser());
 
 // Serve static files from React build in production
 if (process.env.NODE_ENV === 'production') {
